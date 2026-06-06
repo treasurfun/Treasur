@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: #0a0e0c;
+  background-image:
+    radial-gradient(circle at 50% -10%, rgba(31, 157, 87, 0.18), transparent 55%),
+    linear-gradient(#0a0e0c, #070a08);
+  color: #e6ece7;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  -webkit-font-smoothing: antialiased;
+}
+
+.scanlines::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 49;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+::selection {
+  background: #1f9d57;
+  color: #0a0e0c;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #11160f;
+}
+::-webkit-scrollbar-thumb {
+  background: #243029;
+  border: 2px solid #11160f;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #1f9d57;
+}
+
+.pixel-border {
+  border: 2px solid #243029;
+}
+.pixel-card {
+  border: 2px solid #243029;
+  background: #11160f;
+}
+.divider-dotted {
+  background-image: linear-gradient(to right, #243029 33%, transparent 0%);
+  background-size: 8px 2px;
+  background-repeat: repeat-x;
+  height: 2px;
+}
+
+.terminal {
+  background: #0c0f0b;
+  color: #cfc6b0;
+  border: 2px solid #243029;
+  font-family: "JetBrains Mono", monospace;
+}
+.terminal .ok { color: #6fcf97; }
+.terminal .accent { color: #4ade80; }
+.terminal .muted { color: #7e8c80; }
+
+input,
+textarea,
+select {
+  background: #10140f;
+  border: 2px solid #243029;
+  color: #e6ece7;
+  font-family: "JetBrains Mono", monospace;
+  padding: 10px 12px;
+  width: 100%;
+  outline: none;
+}
+input::placeholder,
+textarea::placeholder {
+  color: #6f7d71;
+}
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #1f9d57;
+}
