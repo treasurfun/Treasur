@@ -5,7 +5,7 @@ from functools import lru_cache
 
 class Settings:
     # Branding — appended to every created coin's on-chain description.
-    SITE_NAME: str = os.getenv("SITE_NAME", "assetly.fun")
+    SITE_NAME: str = os.getenv("SITE_NAME", "treasur.fun")
 
     # Solana / RPC
     RPC_ENDPOINT: str = os.getenv("RPC_ENDPOINT", "https://api.mainnet-beta.solana.com")
@@ -40,10 +40,10 @@ class Settings:
     MIN_FUNDING_SOL: float = float(os.getenv("MIN_FUNDING_SOL", "0.05"))   # ~deploy + gas, no markup
     PLATFORM_FEE_SOL: float = float(os.getenv("PLATFORM_FEE_SOL", "0"))    # flat fee (0 = off)
     # Split of each coin's ongoing creator fees:
-    #   BURN_FEE_BPS  -> buy back your MAIN_TOKEN_MINT ($ASSETLY) and BURN it
+    #   BURN_FEE_BPS  -> buy back your MAIN_TOKEN_MINT ($TREASUR) and BURN it
     #   remainder     -> buy the chosen asset basket and distribute to holders
     BURN_FEE_BPS: int = int(os.getenv("BURN_FEE_BPS", "2000"))             # 20% burn / 80% holders
-    MAIN_TOKEN_MINT: str = os.getenv("MAIN_TOKEN_MINT", "")               # your $ASSETLY main token (20% buyback+burn target)
+    MAIN_TOKEN_MINT: str = os.getenv("MAIN_TOKEN_MINT", "")               # your $TREASUR main token (20% buyback+burn target)
     TREASURY_WALLET: str = os.getenv("TREASURY_WALLET", "")
     SWAP_SLIPPAGE_BPS: int = int(os.getenv("SWAP_SLIPPAGE_BPS", "300"))  # 3%
     # Minimum holding (in USD) to be eligible for distributions ("$10 worth").

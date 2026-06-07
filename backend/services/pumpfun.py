@@ -43,21 +43,38 @@ def _pinata_upload(filename: str, content: bytes, content_type: str) -> str:
 
 
 def _build_description(cfg: TokenConfig) -> str:
-    """User description + the auto branding line shown on the coin page,
-    e.g. 'Made with voult.fun - All fees are swapped to HYPE and distributed to holders.'"""
+    """User description + auto branding line shown on the coin page."""
     assets = ", ".join(a.upper() for a in cfg.payout_assets) or "real assets"
     branding = (
-        f"Made with {_settings.SITE_NAME} - All fees are swapped to {assets} "
-        f"and distributed to holders."
+        f"This token was created with {_settings.SITE_NAME} and backed by {assets}. "
+        f"All creator fees are swapped to {assets} and distributed to holders."
     )
     user_desc = (cfg.description or "").strip()
     return f"{user_desc}\n\n{branding}" if user_desc else branding
 
 
+def _decode_data_url(data_url: str) -> tuple[bytes, str, str]:
+    """Decode a base64 data URL -> (bytes, content_type, filename)."""
+    import base64 as _b64
+    ext = "png"
+    content_type = "image/png"
+    payload = data_url
+    if data_url.startswith("data:"):
+        header, payload = data_url.split(",", 1)
+        # header like: data:image/jpeg;base64
+        if ":" in header and ";" in header:
+            content_type = header.split(":", 1)[1].split(";", 1)[0] or content_type
+        ext = content_type.split("/")[-1] or "png"
+    return _b64.b64decode(payload), content_type, f"image.{ext}"
+
+
 def _upload_metadata(cfg: TokenConfig) -> str:
     """Pin image + JSON metadata to IPFS (Pinata), return the metadata URI."""
     image_url = ""
-    if cfg.image_url:
+    if cfg.image_data:  # uploaded / drag-dropped file (base64 data URL)
+        content, ctype, fname = _decode_data_url(cfg.image_data)
+        image_url = _pinata_upload(fname, content, ctype)
+    elif cfg.image_url:  # fallback: fetch from a URL
         img = httpx.get(cfg.image_url, timeout=30).content
         image_url = _pinata_upload("image.png", img, "image/png")
 

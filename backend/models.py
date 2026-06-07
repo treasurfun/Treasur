@@ -21,6 +21,8 @@ class TokenConfig(BaseModel):
     symbol: str = Field(..., max_length=10)
     description: str = Field("", max_length=500)
     image_url: Optional[str] = None
+    # base64 data-URL of an uploaded/drag-dropped image (preferred over image_url)
+    image_data: Optional[str] = None
     twitter: Optional[str] = None
     telegram: Optional[str] = None
     website: Optional[str] = None
@@ -91,7 +93,7 @@ class ClaimResponse(BaseModel):
 
 
 class VerifyResponse(BaseModel):
-    is_voult: bool
+    is_treasur: bool
     mint: str
     launch_id: Optional[str] = None
     status: Optional[str] = None

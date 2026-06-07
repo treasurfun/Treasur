@@ -1,4 +1,4 @@
-# ASSETLY
+# VOULT
 
 Asset-backed token launcher on Solana. Launch a PumpFun token, burn the dev buy
 (zero dev allocation), then route creator fees to holders as a loyalty

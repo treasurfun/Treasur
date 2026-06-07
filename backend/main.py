@@ -23,7 +23,7 @@ from models import (
 import storage
 from storage import encrypt_secret, save_launch, load_launch, list_launches, find_by_mint
 from services import solana_client, cashback, users
-from orchestrator import start_launch
+from orchestrator import start_launch, resume_pending
 from auth import issue_token, current_user, require_admin
 from assets import ASSETS, all_symbols
 
@@ -36,6 +36,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def _resume_on_startup():
+    try:
+        resume_pending()
+    except Exception as e:  # noqa: BLE001
+        print(f"[startup] resume_pending failed: {e}")
 
 
 @app.get("/api/health")
@@ -154,9 +162,24 @@ def _public_view(r: LaunchRecord) -> dict:
     }
 
 
+@app.get("/api/launches/{launch_id}/balance")
+def launch_balance(launch_id: str, user: dict = Depends(current_user)):
+    record = load_launch(launch_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Not found")
+    if record.owner != user["sub"] and not user.get("admin"):
+        raise HTTPException(status_code=403, detail="Not your launch")
+    try:
+        bal = solana_client.get_balance_sol(record.deposit_wallet)
+    except Exception:  # noqa: BLE001
+        bal = 0.0
+    req = _settings.MIN_FUNDING_SOL
+    return {"balance_sol": bal, "required_sol": req, "funded": bal >= req - 0.001}
+
+
 @app.get("/api/feed")
 def public_feed():
-    """Public 'launched through Assetly' feed for the landing carousel."""
+    """Public 'launched through Treasur' feed for the landing carousel."""
     rows = [r for r in list_launches() if r.mint]
     rows.sort(key=lambda r: getattr(r, "created_at", 0), reverse=True)
     return [
@@ -192,9 +215,9 @@ def my_launches(user: dict = Depends(current_user)):
 def verify(mint: str):
     r = find_by_mint(mint)
     if not r:
-        return VerifyResponse(is_voult=False, mint=mint)
+        return VerifyResponse(is_treasur=False, mint=mint)
     return VerifyResponse(
-        is_voult=True,
+        is_treasur=True,
         mint=mint,
         launch_id=r.launch_id,
         status=r.status,
