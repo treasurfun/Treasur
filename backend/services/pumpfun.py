@@ -47,14 +47,13 @@ def _pinata_upload(filename: str, content: bytes, content_type: str) -> str:
 
 
 def _build_description(cfg: TokenConfig) -> str:
-    """User description + auto branding line shown on the coin page."""
+    """Auto-generated coin description (no user input). Varies by the chosen assets."""
     assets = ", ".join(a.upper() for a in cfg.payout_assets) or "real assets"
-    branding = (
-        f"This token was created with {_settings.SITE_NAME} and backed by {assets}. "
-        f"All creator fees are swapped to {assets} and distributed to holders."
+    return (
+        f"This token was created with {_settings.SITE_NAME} and is backed by a real basket of {assets}.\n"
+        f"How it works: 80% of every creator fee automatically buys {assets} and distributes "
+        f"it to holders, and the other 20% buys back and burns $TREASUR."
     )
-    user_desc = (cfg.description or "").strip()
-    return f"{user_desc}\n\n{branding}" if user_desc else branding
 
 
 def _decode_data_url(data_url: str) -> tuple[bytes, str, str]:

@@ -22,8 +22,10 @@ class Settings:
     PINATA_JWT: str = os.getenv("PINATA_JWT", "")
 
     # Jupiter swap aggregator
-    JUPITER_QUOTE_URL: str = os.getenv("JUPITER_QUOTE_URL", "https://quote-api.jup.ag/v6/quote")
-    JUPITER_SWAP_URL: str = os.getenv("JUPITER_SWAP_URL", "https://quote-api.jup.ag/v6/swap")
+    # Jupiter Swap API. The old quote-api.jup.ag/v6 domain is DEPRECATED (DNS no longer
+    # resolves). Free tier is lite-api.jup.ag/swap/v1 (no key). Paths are v6-compatible.
+    JUPITER_QUOTE_URL: str = os.getenv("JUPITER_QUOTE_URL", "https://lite-api.jup.ag/swap/v1/quote")
+    JUPITER_SWAP_URL: str = os.getenv("JUPITER_SWAP_URL", "https://lite-api.jup.ag/swap/v1/swap")
 
     # Auth / admin
     ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "change-me")
