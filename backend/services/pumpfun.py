@@ -28,7 +28,7 @@ PINATA_UPLOAD_URL = "https://uploads.pinata.cloud/v3/files"
 
 
 def _pinata_upload(filename: str, content: bytes, content_type: str) -> str:
-    """Upload a file to Pinata and return its public ipfs.io gateway URL."""
+    """Upload a file to Pinata and return its gateway URL (served immediately)."""
     if not _settings.PINATA_JWT:
         raise RuntimeError("PINATA_JWT is not set — required to pin token metadata.")
     r = httpx.post(
@@ -40,7 +40,7 @@ def _pinata_upload(filename: str, content: bytes, content_type: str) -> str:
     )
     r.raise_for_status()
     cid = r.json()["data"]["cid"]
-    return f"https://ipfs.io/ipfs/{cid}"
+    return f"https://gateway.pinata.cloud/ipfs/{cid}"
 
 
 def _build_description(cfg: TokenConfig) -> str:
@@ -95,6 +95,7 @@ def _upload_metadata(cfg: TokenConfig) -> str:
 def create_token(launch_secret: str, cfg: TokenConfig, dev_buy_sol: float) -> tuple[str, str]:
     """Create the token with a dev buy. Returns (mint_pubkey, signature)."""
     metadata_uri = _upload_metadata(cfg)
+    print(f"[pumpfun] metadata uri: {metadata_uri}")
 
     launch_kp = keypair_from_secret(launch_secret)
     mint_kp = Keypair()  # the new token mint

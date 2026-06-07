@@ -21,7 +21,7 @@ from models import (
     CashbackStatus, ClaimRequest, ClaimResponse,
 )
 import storage
-from storage import encrypt_secret, save_launch, load_launch, list_launches, find_by_mint
+from storage import encrypt_secret, decrypt_secret, save_launch, load_launch, list_launches, find_by_mint
 from services import solana_client, cashback, users
 from orchestrator import start_launch, resume_pending
 from auth import issue_token, current_user, require_admin
@@ -175,6 +175,32 @@ def launch_balance(launch_id: str, user: dict = Depends(current_user)):
         bal = 0.0
     req = _settings.MIN_FUNDING_SOL
     return {"balance_sol": bal, "required_sol": req, "funded": bal >= req - 0.001}
+
+
+@app.post("/api/launches/{launch_id}/withdraw")
+def launch_withdraw(launch_id: str, body: dict, user: dict = Depends(current_user)):
+    """Send the launch wallet's SOL to a destination the owner controls
+    (recover funds from a launch that failed / never started)."""
+    record = load_launch(launch_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Not found")
+    if record.owner != user["sub"] and not user.get("admin"):
+        raise HTTPException(status_code=403, detail="Not your launch")
+    dest = (body.get("destination") or "").strip()
+    if not (32 <= len(dest) <= 44):
+        raise HTTPException(status_code=400, detail="Invalid destination address")
+    try:
+        from solders.pubkey import Pubkey as _Pk
+        _Pk.from_string(dest)
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="Invalid Solana address")
+    bal = solana_client.get_balance_sol(record.deposit_wallet)
+    amount = round(bal - 0.00002, 9)  # leave a hair for the network fee
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail=f"Nothing to withdraw (balance {bal} SOL)")
+    secret = decrypt_secret(record.encrypted_secret)
+    sig = solana_client.transfer_sol(secret, dest, amount)
+    return {"tx": sig, "amount_sol": amount, "destination": dest, "from": record.deposit_wallet}
 
 
 @app.get("/api/feed")
