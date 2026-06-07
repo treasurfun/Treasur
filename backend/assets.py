@@ -25,8 +25,12 @@ ASSETS = {
     },
     "commodities": {
         "GOLD": "Xsv9hRk1z5ystj9MhnA7Lq4vjSsLwzL2nxrwmwtD3re",  # GLDx (Gold xStock) — verify
-        "SILVER": "",  # no silver xStock found — verify/leave blank
-        "OIL": "",     # no oil token found — verify/leave blank
+        # SLVON = iShares Silver Trust, Ondo-tokenized (Ondo Global Markets). Liquid on
+        # Jupiter (~$33M mcap, ~$4M daily vol). This is the silver token voult.fun uses.
+        "SILVER": "iy11ytbSGcUnrjE6Lfv78TFqxKyUESfku1FugS9ondo",
+        # No safe, liquid spot oil token on Solana — oil trades as PERPS on Hyperliquid,
+        # and the "oil" SPLs are memes/scams. Leave blank; a wrong mint loses funds.
+        "OIL": "",
     },
     # xStocks public equities (Token-2022). Mints from the official Solana
     # case study (solana.com/news/case-study-xstocks) — VERIFY on Solscan before live.
