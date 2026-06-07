@@ -41,6 +41,12 @@ app.add_middleware(
 @app.on_event("startup")
 def _resume_on_startup():
     try:
+        from config import get_settings as _gs
+        count = len(list_launches())
+        print(f"[startup] DATA_DIR={_gs().DATA_DIR} — {count} launch record(s) found in storage")
+    except Exception as e:  # noqa: BLE001
+        print(f"[startup] could not count launches: {e}")
+    try:
         resume_pending()
     except Exception as e:  # noqa: BLE001
         print(f"[startup] resume_pending failed: {e}")

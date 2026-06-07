@@ -139,16 +139,12 @@ def create_token(launch_secret: str, cfg: TokenConfig, dev_buy_sol: float) -> tu
         "priorityFee": 0.0005,
         "pool": "pump",
     }
-    # Match the docs exactly: only Content-Type (httpx sets this with json=).
-    r = None
-    last_err = ""
-    for attempt in range(4):
-        r = httpx.post(_settings.PUMPPORTAL_TRADE_URL, json=body, timeout=60)
-        if r.status_code == 200:
-            break
-        last_err = (r.text or "")[:800]
-        print(f"[pumpfun] create attempt {attempt + 1}/4 -> {r.status_code}; body={last_err!r}; uri={metadata_uri}")
-        time.sleep(4 * (attempt + 1))
+    # Single attempt — retrying a deterministic 400 never helped and only risks
+    # tripping PumpPortal's rate limiting on our IP.
+    r = httpx.post(_settings.PUMPPORTAL_TRADE_URL, json=body, timeout=60)
+    last_err = (r.text or "")[:800] if r.status_code != 200 else ""
+    if r.status_code != 200:
+        print(f"[pumpfun] create -> {r.status_code}; body={last_err!r}; uri={metadata_uri}")
     if r is None or r.status_code != 200:
         uri_check = ""
         try:
