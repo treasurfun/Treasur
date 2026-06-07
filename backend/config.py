@@ -15,6 +15,9 @@ class Settings:
     PUMPPORTAL_TRADE_URL: str = os.getenv(
         "PUMPPORTAL_TRADE_URL", "https://pumpportal.fun/api/trade-local"
     )
+    # PumpDev API (used for token creation + fee claiming; PumpPortal trade-local
+    # create is currently broken, returns 400 for valid requests).
+    PUMPDEV_API_URL: str = os.getenv("PUMPDEV_API_URL", "https://pumpdev.io")
     # Pinata IPFS — required for token metadata (pump.fun /api/ipfs is deprecated)
     PINATA_JWT: str = os.getenv("PINATA_JWT", "")
 

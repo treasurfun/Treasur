@@ -11,6 +11,7 @@ Verified against PumpPortal docs (pumpportal.fun/creation and /creator-fee):
 """
 import json
 import time
+import base58
 import httpx
 
 from solders.keypair import Keypair
@@ -107,91 +108,85 @@ def create_token(launch_secret: str, cfg: TokenConfig, dev_buy_sol: float) -> tu
     metadata_uri = _upload_metadata(cfg)
     print(f"[pumpfun] metadata uri: {metadata_uri}")
 
-    # Make sure the metadata is actually served before we ask PumpPortal to
-    # fetch it — otherwise PumpPortal's fetch fails and it returns "Bad Request".
-    for i in range(10):
+    # Make sure the metadata is actually served before creating (the API may
+    # fetch the uri). Pinata's CDN serves it near-instantly; confirm anyway.
+    for i in range(8):
         try:
-            g = httpx.get(metadata_uri, timeout=20)
+            g = httpx.get(metadata_uri, timeout=15)
             if g.status_code == 200:
                 print(f"[pumpfun] metadata reachable after {i + 1} check(s)")
                 break
         except Exception:  # noqa: BLE001
             pass
-        time.sleep(3)
+        time.sleep(2)
     else:
         print("[pumpfun] WARNING: metadata uri not confirmed reachable, sending anyway")
 
     launch_kp = keypair_from_secret(launch_secret)
-    mint_kp = Keypair()  # the new token mint
 
+    # PumpDev /api/create: we supply creator + metadata; it returns a base58
+    # transaction (create + dev buy) and the generated mint's secret key. We
+    # sign locally with creator + mint and broadcast via our own RPC.
     body = {
         "publicKey": str(launch_kp.pubkey()),
-        "action": "create",
-        "tokenMetadata": {
-            "name": cfg.name,
-            "symbol": cfg.symbol,
-            "uri": metadata_uri,
-        },
-        "mint": str(mint_kp.pubkey()),
-        "denominatedInSol": "true",
-        "amount": dev_buy_sol,          # dev buy in SOL
-        "slippage": 10,
-        "priorityFee": 0.0005,
-        "pool": "pump",
+        "name": cfg.name,
+        "symbol": cfg.symbol,
+        "uri": metadata_uri,
+        "buyAmountSol": dev_buy_sol,   # dev buy in SOL (0 = create only)
+        "slippage": 30,
     }
-    # Single attempt — retrying a deterministic 400 never helped and only risks
-    # tripping PumpPortal's rate limiting on our IP.
-    r = httpx.post(_settings.PUMPPORTAL_TRADE_URL, json=body, timeout=60)
-    last_err = (r.text or "")[:800] if r.status_code != 200 else ""
+    url = f"{_settings.PUMPDEV_API_URL}/api/create"
+    r = httpx.post(url, json=body, timeout=90)
     if r.status_code != 200:
-        print(f"[pumpfun] create -> {r.status_code}; body={last_err!r}; uri={metadata_uri}")
-    if r is None or r.status_code != 200:
-        uri_check = ""
-        try:
-            g = httpx.get(metadata_uri, timeout=15)
-            uri_check = f"{g.status_code} {g.headers.get('content-type', '')}"
-        except Exception as e:  # noqa: BLE001
-            uri_check = f"ERR {e}"
         try:
             payer_balance = get_balance_sol(body["publicKey"])
         except Exception as e:  # noqa: BLE001
             payer_balance = f"ERR {e}"
         diag = {
-            "status": r.status_code if r else None,
-            "server": r.headers.get("server") if r else None,
-            "cf_ray": r.headers.get("cf-ray") if r else None,
-            "ctype": r.headers.get("content-type") if r else None,
-            "resp_body": (r.text or "")[:500] if r else None,
+            "provider": "pumpdev",
+            "status": r.status_code,
+            "resp_body": (r.text or "")[:500],
             "uri": metadata_uri,
-            "uri_get": uri_check,
             "payer_balance_sol": payer_balance,
-            "sent": {k: body.get(k) for k in ("action", "denominatedInSol", "amount", "slippage", "priorityFee", "pool")},
-            "tokenMetadata": body.get("tokenMetadata"),
-            "publicKey": body.get("publicKey"),
-            "mint": body.get("mint"),
+            "publicKey": body["publicKey"],
+            "buyAmountSol": dev_buy_sol,
         }
-        raise RuntimeError("PumpPortal create failed: " + json.dumps(diag))
-    unsigned = VersionedTransaction.from_bytes(r.content)
-    signed = VersionedTransaction(unsigned.message, [mint_kp, launch_kp])
+        print(f"[pumpfun] pumpdev create failed: {json.dumps(diag)}")
+        raise RuntimeError("Token create failed (pumpdev): " + json.dumps(diag))
+
+    data = r.json()
+    raw = base58.b58decode(data["transaction"])
+    mint_kp = Keypair.from_base58_string(data["mintSecretKey"])
+    mint = data.get("mint") or str(mint_kp.pubkey())
+
+    # Sign with exactly the message's required signers, in their declared order
+    # (works whether creator or mint is the fee payer).
+    unsigned = VersionedTransaction.from_bytes(raw)
+    msg = unsigned.message
+    n = msg.header.num_required_signatures
+    signer_pubkeys = list(msg.account_keys)[:n]
+    kp_map = {launch_kp.pubkey(): launch_kp, mint_kp.pubkey(): mint_kp}
+    try:
+        ordered = [kp_map[pk] for pk in signer_pubkeys]
+    except KeyError as e:  # a signer we don't hold — shouldn't happen for create
+        raise RuntimeError(f"create tx needs unexpected signer {e}; signers={signer_pubkeys}")
+    signed = VersionedTransaction(msg, ordered)
 
     c = client()
     sig = c.send_raw_transaction(
         bytes(signed),
         opts=TxOpts(skip_preflight=True, preflight_commitment=Confirmed),
     )
-    return str(mint_kp.pubkey()), str(sig.value)
+    return mint, str(sig.value)
 
 
-def claim_creator_fees(launch_secret: str) -> str:
-    """Claim all accumulated pump.fun creator fees to the launch wallet."""
+def claim_creator_fees(launch_secret: str, mint: str | None = None) -> str:
+    """Claim accumulated pump.fun creator fees to the launch wallet (via PumpDev)."""
     launch_kp = keypair_from_secret(launch_secret)
-    body = {
-        "publicKey": str(launch_kp.pubkey()),
-        "action": "collectCreatorFee",
-        "priorityFee": 0.0005,
-        "pool": "pump",
-    }
-    r = httpx.post(_settings.PUMPPORTAL_TRADE_URL, json=body, timeout=60)
+    body = {"publicKey": str(launch_kp.pubkey()), "priorityFee": 0.0001}
+    if mint:
+        body["mint"] = mint  # needed if fee-sharing is configured
+    r = httpx.post(f"{_settings.PUMPDEV_API_URL}/api/claim-account", json=body, timeout=60)
     r.raise_for_status()
     unsigned = VersionedTransaction.from_bytes(r.content)
     signed = VersionedTransaction(unsigned.message, [launch_kp])

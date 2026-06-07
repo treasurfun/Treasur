@@ -124,7 +124,7 @@ def _run(record: LaunchRecord) -> None:
     for cycle in range(record.cycles_done, _settings.DISTRIBUTION_CYCLES):
         cycle_pool_lamports = 0
         try:
-            pumpfun.claim_creator_fees(secret)
+            pumpfun.claim_creator_fees(secret, record.mint)
             time.sleep(5)
             claimed = solana_client.get_balance_sol(record.deposit_wallet)
             record.fees_claimed_sol += claimed
