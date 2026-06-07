@@ -284,7 +284,7 @@ def get_launch(launch_id: str, user: dict = Depends(current_user)):
 
 @app.get("/api/launches")
 def my_launches(user: dict = Depends(current_user)):
-    return [_public_view(r) for r in list_launches() if r.owner == user["sub"]]
+    return [_public_view(r) for r in list_launches() if r.owner == user["sub"] or user.get("admin")]
 
 
 @app.get("/api/verify/{mint}", response_model=VerifyResponse)

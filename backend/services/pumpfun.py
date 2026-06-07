@@ -82,17 +82,21 @@ def _upload_metadata(cfg: TokenConfig) -> str:
     if not image_url:
         raise RuntimeError("A token image is required — please upload one before launching.")
 
-    # field order/shape mirrors the official PumpPortal creation example
+    # Only include fields that have values — PumpPortal validates the fetched
+    # metadata and rejects empty social URLs with a generic "Bad Request".
     metadata = {
         "name": cfg.name,
         "symbol": cfg.symbol,
         "image": image_url,
         "description": _build_description(cfg),
-        "twitter": cfg.twitter or "",
-        "telegram": cfg.telegram or "",
-        "website": cfg.website or "",
         "showName": True,
     }
+    if cfg.twitter:
+        metadata["twitter"] = cfg.twitter
+    if cfg.telegram:
+        metadata["telegram"] = cfg.telegram
+    if cfg.website:
+        metadata["website"] = cfg.website
     return _pinata_upload("metadata.json", json.dumps(metadata).encode(), "application/json")
 
 
