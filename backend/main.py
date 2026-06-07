@@ -194,13 +194,63 @@ def launch_withdraw(launch_id: str, body: dict, user: dict = Depends(current_use
         _Pk.from_string(dest)
     except Exception:  # noqa: BLE001
         raise HTTPException(status_code=400, detail="Invalid Solana address")
-    bal = solana_client.get_balance_sol(record.deposit_wallet)
-    amount = round(bal - 0.00002, 9)  # leave a hair for the network fee
+    try:
+        bal = solana_client.get_balance_sol(record.deposit_wallet)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Could not read balance: {e}")
+    amount = round(bal - 0.001, 9)  # keep above rent-exempt min so the tx isn't rejected
     if amount <= 0:
         raise HTTPException(status_code=400, detail=f"Nothing to withdraw (balance {bal} SOL)")
-    secret = decrypt_secret(record.encrypted_secret)
-    sig = solana_client.transfer_sol(secret, dest, amount)
+    try:
+        secret = decrypt_secret(record.encrypted_secret)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Could not decrypt wallet key (ENCRYPTION_KEY changed?): {e}")
+    try:
+        sig = solana_client.transfer_sol(secret, dest, amount)
+    except Exception as e:  # noqa: BLE001 — surface the real chain error to the user
+        raise HTTPException(status_code=502, detail=f"Transfer failed: {e}")
     return {"tx": sig, "amount_sol": amount, "destination": dest, "from": record.deposit_wallet}
+
+
+@app.post("/api/withdraw-all")
+def withdraw_all(body: dict, user: dict = Depends(current_user)):
+    """Drain SOL from ALL of the caller's launch wallets to one destination."""
+    dest = (body.get("destination") or "").strip()
+    if not (32 <= len(dest) <= 44):
+        raise HTTPException(status_code=400, detail="Invalid destination address")
+    try:
+        from solders.pubkey import Pubkey as _Pk
+        _Pk.from_string(dest)
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="Invalid Solana address")
+
+    results = []
+    total = 0.0
+    for record in list_launches():
+        if record.owner != user["sub"] and not user.get("admin"):
+            continue
+        item = {"launch_id": record.launch_id, "wallet": record.deposit_wallet, "symbol": record.config.symbol}
+        try:
+            bal = solana_client.get_balance_sol(record.deposit_wallet)
+        except Exception as e:  # noqa: BLE001
+            item["error"] = f"balance: {e}"
+            results.append(item)
+            continue
+        amount = round(bal - 0.001, 9)  # keep above rent-exempt min
+        if amount <= 0:
+            item["skipped"] = f"empty ({bal} SOL)"
+            results.append(item)
+            continue
+        try:
+            secret = decrypt_secret(record.encrypted_secret)
+            sig = solana_client.transfer_sol(secret, dest, amount)
+            item["amount_sol"] = amount
+            item["tx"] = sig
+            total += amount
+        except Exception as e:  # noqa: BLE001
+            item["error"] = str(e)[:200]
+        results.append(item)
+    return {"destination": dest, "total_sol": round(total, 9), "results": results}
 
 
 @app.get("/api/feed")

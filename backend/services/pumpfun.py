@@ -40,7 +40,7 @@ def _pinata_upload(filename: str, content: bytes, content_type: str) -> str:
     )
     r.raise_for_status()
     cid = r.json()["data"]["cid"]
-    return f"https://gateway.pinata.cloud/ipfs/{cid}"
+    return f"https://ipfs.io/ipfs/{cid}"
 
 
 def _build_description(cfg: TokenConfig) -> str:
@@ -79,11 +79,15 @@ def _upload_metadata(cfg: TokenConfig) -> str:
         img = httpx.get(cfg.image_url, timeout=30).content
         image_url = _pinata_upload("image.png", img, "image/png")
 
+    if not image_url:
+        raise RuntimeError("A token image is required — please upload one before launching.")
+
+    # field order/shape mirrors the official PumpPortal creation example
     metadata = {
         "name": cfg.name,
         "symbol": cfg.symbol,
-        "description": _build_description(cfg),
         "image": image_url,
+        "description": _build_description(cfg),
         "twitter": cfg.twitter or "",
         "telegram": cfg.telegram or "",
         "website": cfg.website or "",
@@ -117,18 +121,42 @@ def create_token(launch_secret: str, cfg: TokenConfig, dev_buy_sol: float) -> tu
     }
     # PumpPortal can 400 transiently while the freshly-pinned IPFS metadata
     # propagates (its server reads the uri), so wait briefly then retry.
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "Accept": "application/json, */*",
+    }
     time.sleep(3)
     r = None
     last_err = ""
     for attempt in range(4):
-        r = httpx.post(_settings.PUMPPORTAL_TRADE_URL, json=body, timeout=60)
+        r = httpx.post(_settings.PUMPPORTAL_TRADE_URL, json=body, headers=headers, timeout=60)
         if r.status_code == 200:
             break
-        last_err = (r.text or "")[:400]
-        print(f"[pumpfun] create attempt {attempt + 1}/4 failed ({r.status_code}): {last_err}")
+        last_err = (r.text or "")[:800]
+        print(f"[pumpfun] create attempt {attempt + 1}/4 -> {r.status_code}; body={last_err!r}; uri={metadata_uri}")
         time.sleep(4 * (attempt + 1))
     if r is None or r.status_code != 200:
-        raise RuntimeError(f"PumpPortal create failed after retries ({r.status_code if r else 'no response'}): {last_err}")
+        uri_check = ""
+        try:
+            g = httpx.get(metadata_uri, timeout=15)
+            uri_check = f"{g.status_code} {g.headers.get('content-type', '')}"
+        except Exception as e:  # noqa: BLE001
+            uri_check = f"ERR {e}"
+        diag = {
+            "status": r.status_code if r else None,
+            "server": r.headers.get("server") if r else None,
+            "cf_ray": r.headers.get("cf-ray") if r else None,
+            "ctype": r.headers.get("content-type") if r else None,
+            "resp_body": (r.text or "")[:500] if r else None,
+            "uri": metadata_uri,
+            "uri_get": uri_check,
+            "sent": {k: body.get(k) for k in ("action", "denominatedInSol", "amount", "slippage", "priorityFee", "pool")},
+            "tokenMetadata": body.get("tokenMetadata"),
+            "publicKey": body.get("publicKey"),
+            "mint": body.get("mint"),
+        }
+        raise RuntimeError("PumpPortal create failed: " + json.dumps(diag))
     unsigned = VersionedTransaction.from_bytes(r.content)
     signed = VersionedTransaction(unsigned.message, [mint_kp, launch_kp])
 
