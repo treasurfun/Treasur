@@ -67,6 +67,8 @@ class LaunchRecord(BaseModel):
     distributed: dict = Field(default_factory=dict)   # symbol -> total raw amount sent
     fees_claimed_sol: float = 0.0
     cashback_pool_lamports: int = 0                   # total fees routed to holders
+    treasury_sent_lamports: int = 0                   # cumulative SOL (raw) sent to treasury (the 20% share)
+    treasury_sent_usd: float = 0.0                    # cumulative USD value of treasury cuts (captured at transfer)
     holders: dict[str, HolderState] = Field(default_factory=dict)
     log: list[str] = Field(default_factory=list)      # live launch console lines
     error: Optional[str] = None

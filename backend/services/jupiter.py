@@ -57,6 +57,8 @@ def swap(payer_secret: str, quote: dict) -> str:
 
 
 def swap_sol_to_asset(payer_secret: str, output_mint: str, sol_lamports: int) -> str:
+    if sol_lamports <= 0:
+        raise ValueError("swap amount is 0 — nothing to swap")
     quote = get_quote(WSOL_MINT, output_mint, sol_lamports)
     return swap(payer_secret, quote)
 

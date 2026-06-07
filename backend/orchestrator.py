@@ -16,10 +16,13 @@ from models import LaunchRecord, LaunchStatus
 from storage import save_launch, decrypt_secret, list_launches
 from assets import resolve_mint
 from services import solana_client, pumpfun, jupiter, helius, distribution, cashback
+from solders.pubkey import Pubkey as _Pubkey
 
 _settings = get_settings()
+_PUMP_FUN_PROGRAM = _Pubkey.from_string("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P")
 _semaphore = threading.Semaphore(_settings.MAX_CONCURRENT_LAUNCHES)
 LAMPORTS_PER_SOL = 1_000_000_000
+_SOL_MINT = "So11111111111111111111111111111111111111112"  # wrapped SOL, for USD price
 
 
 def _set(record: LaunchRecord, status: LaunchStatus) -> None:
@@ -69,9 +72,11 @@ def _run(record: LaunchRecord) -> None:
     # 1. create token with dev buy (skip if already created — resume-safe)
     if not record.mint:
         _log(record, "Building tx for token...")
-        mint, tx = pumpfun.create_token(secret, cfg, _settings.DEV_BUY_SOL)
+        mint, tx, image_url = pumpfun.create_token(secret, cfg, _settings.DEV_BUY_SOL)
         record.mint = mint
         record.tx_create = tx
+        if image_url:
+            record.config.image_url = image_url  # so the homepage feed shows the dev's image
         _set(record, LaunchStatus.TOKEN_CREATED)
         _log(record, f"Created: {mint}")
         _log(record, "[waiting] Waiting 8s for token to propagate...")
@@ -82,11 +87,21 @@ def _run(record: LaunchRecord) -> None:
     if not _reached(record, LaunchStatus.BURNED):
         if _settings.BURN_DEV_BUY:
             _log(record, "[burning] Burning dev buy tokens...")
-            dev_balance = solana_client.get_token_balance_raw(record.deposit_wallet, mint)
+            dev_balance = 0
+            for _ in range(15):  # poll up to ~45s for the dev buy to actually land
+                dev_balance = solana_client.get_token_balance_raw(record.deposit_wallet, mint)
+                if dev_balance > 0:
+                    break
+                time.sleep(3)
             if dev_balance > 0:
-                decimals = distribution._mint_decimals(solana_client.client(), mint)
-                record.tx_burn = solana_client.burn_all(secret, mint, decimals, dev_balance)
-                _log(record, f"Burned {dev_balance} ({record.tx_burn})")
+                try:
+                    decimals = distribution._mint_decimals(solana_client.client(), mint)
+                    record.tx_burn = solana_client.burn_all(secret, mint, decimals, dev_balance)
+                    _log(record, f"Burned {dev_balance} ({record.tx_burn})")
+                except Exception as e:  # noqa: BLE001 — log but don't block the launch
+                    _log(record, f"burn failed: {e}")
+            else:
+                _log(record, "No dev-buy tokens found to burn (skipped)")
         else:
             _log(record, "Dev buy kept (burn disabled)")
 
@@ -106,15 +121,20 @@ def _run(record: LaunchRecord) -> None:
         if assets and not cashback_mode:
             bal_sol = solana_client.get_balance_sol(record.deposit_wallet)
             budget_lamports = int(max(bal_sol - 0.05, 0) * LAMPORTS_PER_SOL)  # keep gas buffer
-            _log(record, f"[swapping] Swapping {budget_lamports/LAMPORTS_PER_SOL:.4f} SOL into {len(assets)} assets...")
-            alloc = _alloc(budget_lamports, assets, cfg.payout_weights)
-            for sym in assets:
-                try:
-                    jupiter.swap_sol_to_asset(secret, resolve_mint(sym), alloc[sym])
-                    _log(record, f"{alloc[sym]/LAMPORTS_PER_SOL:.4f} SOL -> {sym}")
-                    time.sleep(3)
-                except Exception as e:  # noqa: BLE001 — keep going on a single failed leg
-                    _log(record, f"swap {sym} failed: {e}")
+            if budget_lamports < 1_000_000:  # < 0.001 SOL — nothing spare to swap
+                _log(record, "[swapping] No spare SOL to swap yet — the basket is bought from creator fees each cycle.")
+            else:
+                _log(record, f"[swapping] Swapping {budget_lamports/LAMPORTS_PER_SOL:.4f} SOL into {len(assets)} assets...")
+                alloc = _alloc(budget_lamports, assets, cfg.payout_weights)
+                for sym in assets:
+                    if alloc.get(sym, 0) < 1_000_000:  # < 0.001 SOL — dust leg, would just fail / buy nothing
+                        continue
+                    try:
+                        jupiter.swap_sol_to_asset(secret, resolve_mint(sym), alloc[sym])
+                        _log(record, f"{alloc[sym]/LAMPORTS_PER_SOL:.4f} SOL -> {sym}")
+                        time.sleep(3)
+                    except Exception as e:  # noqa: BLE001 — keep going on a single failed leg
+                        _log(record, f"swap {sym} failed: {e}")
         _set(record, LaunchStatus.SWAPPED)
 
     # 4. cycles
@@ -129,10 +149,10 @@ def _run(record: LaunchRecord) -> None:
             claimed = solana_client.get_balance_sol(record.deposit_wallet)
             record.fees_claimed_sol += claimed
 
-            # burn portion of fees: buy back the coin (or protocol token) and burn it
+            # 20% of fees -> treasury wallet (team buys back & burns $TREASUR manually, posts Solscan)
             burn_sol = claimed * _settings.BURN_FEE_BPS / 10_000
             if burn_sol > 0.001:
-                _buyback_and_burn(record, secret, burn_sol)
+                _route_treasury_share(record, secret, burn_sol)
 
             holder_sol = max(claimed - burn_sol - 0.02, 0)  # keep gas buffer
 
@@ -141,6 +161,8 @@ def _run(record: LaunchRecord) -> None:
             elif assets:
                 alloc = _alloc(int(holder_sol * LAMPORTS_PER_SOL), assets, cfg.payout_weights)
                 for sym in assets:
+                    if alloc.get(sym, 0) < 1_000_000:  # < 0.001 SOL — dust leg
+                        continue
                     try:
                         jupiter.swap_sol_to_asset(secret, resolve_mint(sym), alloc[sym])
                         time.sleep(3)
@@ -167,9 +189,23 @@ def _run(record: LaunchRecord) -> None:
     _set(record, LaunchStatus.COMPLETE)
 
 
+def _bonding_curve_pda(mint: str) -> str:
+    """The pump.fun bonding-curve PDA holds the unsold supply — never pay it."""
+    try:
+        bc, _ = _Pubkey.find_program_address(
+            [b"bonding-curve", bytes(_Pubkey.from_string(mint))], _PUMP_FUN_PROGRAM
+        )
+        return str(bc)
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def _eligible_holders(mint: str) -> dict[str, int]:
-    """Holders worth at least MIN_HOLD_USD of the launched token."""
+    """Real holders worth >= MIN_HOLD_USD of the launched token. Excludes the
+    pump.fun bonding curve — it holds the unsold supply and would otherwise
+    receive ~all of the basket instead of the actual holders."""
     holders = helius.get_holders(mint, min_raw=1)
+    holders.pop(_bonding_curve_pda(mint), None)  # never distribute to the curve
     price = jupiter.token_price_usdc(mint, _settings.TOKEN_DECIMALS)
     if price > 0:
         min_raw = int(_settings.MIN_HOLD_USD / price * (10 ** _settings.TOKEN_DECIMALS))
@@ -177,32 +213,26 @@ def _eligible_holders(mint: str) -> dict[str, int]:
     return holders
 
 
-def _buyback_and_burn(record: LaunchRecord, secret: str, sol_amount: float) -> None:
-    """Use `sol_amount` SOL to buy back your $TREASUR main token and burn it.
-    Until MAIN_TOKEN_MINT is set, the burn share accrues in the treasury."""
-    lamports = int(sol_amount * LAMPORTS_PER_SOL)
-    mint = _settings.MAIN_TOKEN_MINT
-    if not mint:
-        if _settings.TREASURY_WALLET:
-            try:
-                solana_client.transfer_sol(secret, _settings.TREASURY_WALLET, sol_amount)
-                _log(record, f"Burn share {sol_amount:.4f} SOL -> treasury (main token not set yet)")
-            except Exception as e:  # noqa: BLE001
-                _log(record, f"burn-share transfer failed: {e}")
+def _route_treasury_share(record: LaunchRecord, secret: str, sol_amount: float) -> None:
+    """Send the 20% fee share to the treasury wallet. The team buys back and
+    burns $TREASUR manually from there and posts the Solscan proof.
+    Tracks how much each launch has contributed (raw SOL + USD at transfer time)."""
+    if not _settings.TREASURY_WALLET or sol_amount <= 0:
         return
     try:
-        c = solana_client.client()
-        decimals, program_id = distribution._mint_info(c, mint)
-        before = solana_client.get_token_balance_raw(record.deposit_wallet, mint, program_id)
-        jupiter.swap_sol_to_asset(secret, mint, lamports)
-        time.sleep(6)
-        after = solana_client.get_token_balance_raw(record.deposit_wallet, mint, program_id)
-        bought = after - before
-        if bought > 0:
-            solana_client.burn_all(secret, mint, decimals, bought)
-            _log(record, f"Buyback+burn {sol_amount:.4f} SOL -> burned {bought} $TREASUR")
+        sig = solana_client.transfer_sol(secret, _settings.TREASURY_WALLET, sol_amount)
     except Exception as e:  # noqa: BLE001
-        _log(record, f"buyback/burn failed: {e}")
+        _log(record, f"treasury transfer failed: {e}")
+        return
+    record.treasury_sent_lamports += int(sol_amount * LAMPORTS_PER_SOL)
+    try:
+        px = jupiter.token_price_usdc(_SOL_MINT, 9)
+        if px > 0:
+            record.treasury_sent_usd += sol_amount * px
+    except Exception:  # noqa: BLE001 — USD is best-effort; raw SOL is the source of truth
+        pass
+    w = _settings.TREASURY_WALLET
+    _log(record, f"Treasury share {sol_amount:.4f} SOL -> {w[:4]}..{w[-4:]} ({sig})")
 
 
 def start_launch(record: LaunchRecord) -> None:

@@ -41,9 +41,10 @@ def _pinata_upload(filename: str, content: bytes, content_type: str) -> str:
     )
     r.raise_for_status()
     cid = r.json()["data"]["cid"]
-    # Pinata's own CDN serves freshly-pinned content immediately; ipfs.io can
-    # take minutes and time out, which makes PumpPortal's metadata fetch fail.
-    return f"https://gateway.pinata.cloud/ipfs/{cid}"
+    # A dedicated Pinata gateway serves content fast and isn't shared-rate-limited,
+    # so pump.fun can reliably fetch the token image. Fall back to the shared gateway.
+    gw = (_settings.PINATA_GATEWAY or "gateway.pinata.cloud").replace("https://", "").replace("http://", "").strip("/")
+    return f"https://{gw}/ipfs/{cid}"
 
 
 def _build_description(cfg: TokenConfig) -> str:
@@ -71,8 +72,8 @@ def _decode_data_url(data_url: str) -> tuple[bytes, str, str]:
     return _b64.b64decode(payload), content_type, f"image.{ext}"
 
 
-def _upload_metadata(cfg: TokenConfig) -> str:
-    """Pin image + JSON metadata to IPFS (Pinata), return the metadata URI."""
+def _upload_metadata(cfg: TokenConfig) -> tuple[str, str]:
+    """Pin image + JSON metadata to IPFS (Pinata). Returns (metadata URI, image URL)."""
     image_url = ""
     if cfg.image_data:  # uploaded / drag-dropped file (base64 data URL)
         content, ctype, fname = _decode_data_url(cfg.image_data)
@@ -99,12 +100,13 @@ def _upload_metadata(cfg: TokenConfig) -> str:
         metadata["telegram"] = cfg.telegram
     if cfg.website:
         metadata["website"] = cfg.website
-    return _pinata_upload("metadata.json", json.dumps(metadata).encode(), "application/json")
+    meta_uri = _pinata_upload("metadata.json", json.dumps(metadata).encode(), "application/json")
+    return meta_uri, image_url
 
 
-def create_token(launch_secret: str, cfg: TokenConfig, dev_buy_sol: float) -> tuple[str, str]:
-    """Create the token with a dev buy. Returns (mint_pubkey, signature)."""
-    metadata_uri = _upload_metadata(cfg)
+def create_token(launch_secret: str, cfg: TokenConfig, dev_buy_sol: float) -> tuple[str, str, str]:
+    """Create the token with a dev buy. Returns (mint_pubkey, signature, image_url)."""
+    metadata_uri, image_url = _upload_metadata(cfg)
     print(f"[pumpfun] metadata uri: {metadata_uri}")
 
     # Make sure the metadata is actually served before creating (the API may
@@ -176,7 +178,7 @@ def create_token(launch_secret: str, cfg: TokenConfig, dev_buy_sol: float) -> tu
         bytes(signed),
         opts=TxOpts(skip_preflight=True, preflight_commitment=Confirmed),
     )
-    return mint, str(sig.value)
+    return mint, str(sig.value), image_url
 
 
 def claim_creator_fees(launch_secret: str, mint: str | None = None) -> str:

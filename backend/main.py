@@ -22,12 +22,13 @@ from models import (
 )
 import storage
 from storage import encrypt_secret, decrypt_secret, save_launch, load_launch, list_launches, find_by_mint
-from services import solana_client, cashback, users
+from services import solana_client, cashback, users, jupiter
 from orchestrator import start_launch, resume_pending
 from auth import issue_token, current_user, require_admin
 from assets import ASSETS, all_symbols
 
 _settings = get_settings()
+_SOL_MINT = "So11111111111111111111111111111111111111112"  # wrapped SOL, for USD price
 app = FastAPI(title="VOULT", version="1.0.0")
 
 app.add_middleware(
@@ -41,9 +42,14 @@ app.add_middleware(
 @app.on_event("startup")
 def _resume_on_startup():
     try:
+        import os as _os
         from config import get_settings as _gs
+        data_dir = _gs().DATA_DIR
         count = len(list_launches())
-        print(f"[startup] DATA_DIR={_gs().DATA_DIR} — {count} launch record(s) found in storage")
+        mounted = _os.path.ismount(data_dir)
+        flag = "VOLUME MOUNTED — data persists across redeploys" if mounted \
+            else "NOT A VOLUME — data is EPHEMERAL and will be wiped on redeploy"
+        print(f"[startup] DATA_DIR={data_dir} — {count} launch record(s) found — [{flag}]")
     except Exception as e:  # noqa: BLE001
         print(f"[startup] could not count launches: {e}")
     try:
@@ -276,6 +282,40 @@ def public_feed():
         }
         for r in rows[:24]
     ]
+
+
+@app.get("/api/leaderboard")
+def leaderboard():
+    """Projects ranked by total $ sent to the treasury — the 20% buyback/burn share
+    the team uses to buy back & burn $TREASUR."""
+    rows = [r for r in list_launches() if r.mint]
+    # only hit the price API if some record has raw SOL but no captured USD
+    need_px = any(
+        (getattr(r, "treasury_sent_usd", 0.0) <= 0) and getattr(r, "treasury_sent_lamports", 0)
+        for r in rows
+    )
+    try:
+        sol_px = jupiter.token_price_usdc(_SOL_MINT, 9) if need_px else 0.0
+    except Exception:  # noqa: BLE001
+        sol_px = 0.0
+    out = []
+    for r in rows:
+        lamports = getattr(r, "treasury_sent_lamports", 0)
+        usd = getattr(r, "treasury_sent_usd", 0.0)
+        if usd <= 0 and lamports and sol_px > 0:
+            usd = lamports / 1e9 * sol_px
+        out.append({
+            "launch_id": r.launch_id,
+            "name": r.config.name,
+            "symbol": r.config.symbol,
+            "mint": r.mint,
+            "image_url": r.config.image_url,
+            "twitter": r.config.twitter,
+            "treasury_usd": round(usd, 2),
+            "treasury_sol": round(lamports / 1e9, 4),
+        })
+    out.sort(key=lambda x: x["treasury_usd"], reverse=True)
+    return out[:100]
 
 
 @app.get("/api/launches/{launch_id}")

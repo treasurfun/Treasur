@@ -20,6 +20,10 @@ class Settings:
     PUMPDEV_API_URL: str = os.getenv("PUMPDEV_API_URL", "https://pumpdev.io")
     # Pinata IPFS — required for token metadata (pump.fun /api/ipfs is deprecated)
     PINATA_JWT: str = os.getenv("PINATA_JWT", "")
+    # Dedicated Pinata gateway (e.g. mygw.mypinata.cloud). Far more reliable than the
+    # shared gateway.pinata.cloud, which is rate-limited — pump.fun often fails to load
+    # the token image through the shared one. Leave empty to use the shared gateway.
+    PINATA_GATEWAY: str = os.getenv("PINATA_GATEWAY", "")
 
     # Jupiter swap aggregator
     # Jupiter Swap API. The old quote-api.jup.ag/v6 domain is DEPRECATED (DNS no longer
@@ -45,11 +49,11 @@ class Settings:
     MIN_FUNDING_SOL: float = float(os.getenv("MIN_FUNDING_SOL", "0.05"))   # ~deploy + gas, no markup
     PLATFORM_FEE_SOL: float = float(os.getenv("PLATFORM_FEE_SOL", "0"))    # flat fee (0 = off)
     # Split of each coin's ongoing creator fees:
-    #   BURN_FEE_BPS  -> buy back your MAIN_TOKEN_MINT ($TREASUR) and BURN it
+    #   BURN_FEE_BPS  -> sent to TREASURY_WALLET (team buys back & burns $TREASUR manually, posts Solscan)
     #   remainder     -> buy the chosen asset basket and distribute to holders
-    BURN_FEE_BPS: int = int(os.getenv("BURN_FEE_BPS", "2000"))             # 20% burn / 80% holders
-    MAIN_TOKEN_MINT: str = os.getenv("MAIN_TOKEN_MINT", "")               # your $TREASUR main token (20% buyback+burn target)
-    TREASURY_WALLET: str = os.getenv("TREASURY_WALLET", "")
+    BURN_FEE_BPS: int = int(os.getenv("BURN_FEE_BPS", "2000"))             # 20% treasury / 80% holders
+    MAIN_TOKEN_MINT: str = os.getenv("MAIN_TOKEN_MINT", "")               # unused: burns are now manual from the treasury
+    TREASURY_WALLET: str = os.getenv("TREASURY_WALLET", "")               # the 20% share lands here
     SWAP_SLIPPAGE_BPS: int = int(os.getenv("SWAP_SLIPPAGE_BPS", "300"))  # 3%
     # Minimum holding (in USD) to be eligible for distributions ("$10 worth").
     MIN_HOLD_USD: float = float(os.getenv("MIN_HOLD_USD", "10"))
