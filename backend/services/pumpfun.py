@@ -10,6 +10,7 @@ Verified against PumpPortal docs (pumpportal.fun/creation and /creator-fee):
     and is signed by the payer only.
 """
 import json
+import time
 import httpx
 
 from solders.keypair import Keypair
@@ -113,10 +114,20 @@ def create_token(launch_secret: str, cfg: TokenConfig, dev_buy_sol: float) -> tu
         "priorityFee": 0.0005,
         "pool": "pump",
     }
-    r = httpx.post(_settings.PUMPPORTAL_TRADE_URL, json=body, timeout=60)
-    r.raise_for_status()
-
-    # create must be signed by BOTH the mint authority and the payer (mint first)
+    # PumpPortal can 400 transiently while the freshly-pinned IPFS metadata
+    # propagates (its server reads the uri), so wait briefly then retry.
+    time.sleep(3)
+    r = None
+    last_err = ""
+    for attempt in range(4):
+        r = httpx.post(_settings.PUMPPORTAL_TRADE_URL, json=body, timeout=60)
+        if r.status_code == 200:
+            break
+        last_err = (r.text or "")[:400]
+        print(f"[pumpfun] create attempt {attempt + 1}/4 failed ({r.status_code}): {last_err}")
+        time.sleep(4 * (attempt + 1))
+    if r is None or r.status_code != 200:
+        raise RuntimeError(f"PumpPortal create failed after retries ({r.status_code if r else 'no response'}): {last_err}")
     unsigned = VersionedTransaction.from_bytes(r.content)
     signed = VersionedTransaction(unsigned.message, [mint_kp, launch_kp])
 
