@@ -20,7 +20,7 @@ from solana.rpc.commitment import Confirmed
 
 from config import get_settings
 from models import TokenConfig
-from services.solana_client import keypair_from_secret, client
+from services.solana_client import keypair_from_secret, client, get_balance_sol
 
 _settings = get_settings()
 
@@ -40,7 +40,9 @@ def _pinata_upload(filename: str, content: bytes, content_type: str) -> str:
     )
     r.raise_for_status()
     cid = r.json()["data"]["cid"]
-    return f"https://ipfs.io/ipfs/{cid}"
+    # Pinata's own CDN serves freshly-pinned content immediately; ipfs.io can
+    # take minutes and time out, which makes PumpPortal's metadata fetch fail.
+    return f"https://gateway.pinata.cloud/ipfs/{cid}"
 
 
 def _build_description(cfg: TokenConfig) -> str:
@@ -105,6 +107,20 @@ def create_token(launch_secret: str, cfg: TokenConfig, dev_buy_sol: float) -> tu
     metadata_uri = _upload_metadata(cfg)
     print(f"[pumpfun] metadata uri: {metadata_uri}")
 
+    # Make sure the metadata is actually served before we ask PumpPortal to
+    # fetch it — otherwise PumpPortal's fetch fails and it returns "Bad Request".
+    for i in range(10):
+        try:
+            g = httpx.get(metadata_uri, timeout=20)
+            if g.status_code == 200:
+                print(f"[pumpfun] metadata reachable after {i + 1} check(s)")
+                break
+        except Exception:  # noqa: BLE001
+            pass
+        time.sleep(3)
+    else:
+        print("[pumpfun] WARNING: metadata uri not confirmed reachable, sending anyway")
+
     launch_kp = keypair_from_secret(launch_secret)
     mint_kp = Keypair()  # the new token mint
 
@@ -123,18 +139,11 @@ def create_token(launch_secret: str, cfg: TokenConfig, dev_buy_sol: float) -> tu
         "priorityFee": 0.0005,
         "pool": "pump",
     }
-    # PumpPortal can 400 transiently while the freshly-pinned IPFS metadata
-    # propagates (its server reads the uri), so wait briefly then retry.
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        "Accept": "application/json, */*",
-    }
-    time.sleep(3)
+    # Match the docs exactly: only Content-Type (httpx sets this with json=).
     r = None
     last_err = ""
     for attempt in range(4):
-        r = httpx.post(_settings.PUMPPORTAL_TRADE_URL, json=body, headers=headers, timeout=60)
+        r = httpx.post(_settings.PUMPPORTAL_TRADE_URL, json=body, timeout=60)
         if r.status_code == 200:
             break
         last_err = (r.text or "")[:800]
@@ -147,6 +156,10 @@ def create_token(launch_secret: str, cfg: TokenConfig, dev_buy_sol: float) -> tu
             uri_check = f"{g.status_code} {g.headers.get('content-type', '')}"
         except Exception as e:  # noqa: BLE001
             uri_check = f"ERR {e}"
+        try:
+            payer_balance = get_balance_sol(body["publicKey"])
+        except Exception as e:  # noqa: BLE001
+            payer_balance = f"ERR {e}"
         diag = {
             "status": r.status_code if r else None,
             "server": r.headers.get("server") if r else None,
@@ -155,6 +168,7 @@ def create_token(launch_secret: str, cfg: TokenConfig, dev_buy_sol: float) -> tu
             "resp_body": (r.text or "")[:500] if r else None,
             "uri": metadata_uri,
             "uri_get": uri_check,
+            "payer_balance_sol": payer_balance,
             "sent": {k: body.get(k) for k in ("action", "denominatedInSol", "amount", "slippage", "priorityFee", "pool")},
             "tokenMetadata": body.get("tokenMetadata"),
             "publicKey": body.get("publicKey"),
