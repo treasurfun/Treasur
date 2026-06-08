@@ -106,3 +106,8 @@ class VerifyResponse(BaseModel):
     status: Optional[str] = None
     burned: bool = False
     distributed: dict = Field(default_factory=dict)
+    name: Optional[str] = None
+    symbol: Optional[str] = None
+    image_url: Optional[str] = None
+    creator_twitter: Optional[str] = None
+    assets: list[str] = Field(default_factory=list)

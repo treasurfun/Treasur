@@ -172,10 +172,35 @@ def create_launch(req: CreateLaunchRequest, user: dict = Depends(current_user)):
 
 @app.get("/api/me")
 def me(user: dict = Depends(current_user)):
+    wallet = user["sub"]
+    # aggregate treasury contributions by dev to compute this user's total + rank
+    agg: dict[str, dict] = {}
+    for r in list_launches():
+        if not r.mint or not r.owner:
+            continue
+        a = agg.setdefault(r.owner, {"lamports": 0, "usd": 0.0, "projects": 0})
+        a["lamports"] += getattr(r, "treasury_sent_lamports", 0)
+        a["usd"] += getattr(r, "treasury_sent_usd", 0.0)
+        a["projects"] += 1
+    mine = agg.get(wallet, {"lamports": 0, "usd": 0.0, "projects": 0})
+    usd = mine["usd"]
+    if usd <= 0 and mine["lamports"]:
+        try:
+            usd = mine["lamports"] / 1e9 * jupiter.token_price_usdc(_SOL_MINT, 9)
+        except Exception:  # noqa: BLE001
+            pass
+    ranking = sorted(agg.items(), key=lambda kv: (kv[1]["usd"], kv[1]["lamports"]), reverse=True)
+    rank = next((i + 1 for i, (o, _) in enumerate(ranking) if o == wallet), None)
     return {
-        "wallet": user["sub"],
-        "name": users.get_name(user["sub"]),
+        "wallet": wallet,
+        "name": users.get_name(wallet),
+        "twitter": users.get_twitter(wallet),
         "admin": user.get("admin", False),
+        "treasury_usd": round(usd, 2),
+        "treasury_sol": round(mine["lamports"] / 1e9, 4),
+        "projects": mine["projects"],
+        "rank": rank,
+        "total_devs": len(agg),
     }
 
 
@@ -211,6 +236,8 @@ def _public_view(r: LaunchRecord) -> dict:
         "cycles_done": r.cycles_done,
         "distributed": r.distributed,
         "fees_claimed_sol": r.fees_claimed_sol,
+        "treasury_usd": round(getattr(r, "treasury_sent_usd", 0.0), 2),
+        "treasury_sol": round(getattr(r, "treasury_sent_lamports", 0) / 1e9, 4),
         "log": r.log,
         "error": r.error,
     }
@@ -438,6 +465,11 @@ def verify(mint: str):
         status=r.status,
         burned=bool(r.tx_burn),
         distributed=r.distributed,
+        name=r.config.name,
+        symbol=r.config.symbol,
+        image_url=r.config.image_url,
+        creator_twitter=(r.config.creator_twitter if r.config.show_creator_twitter else None),
+        assets=r.config.payout_assets,
     )
 
 
