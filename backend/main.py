@@ -432,6 +432,8 @@ def competition_status():
         "project_pct": _settings.COMPETITION_PROJECT_PCT,
         "last_run_ts": last or None,
         "next_run_ts": (last + interval) if last else None,
+        "pool_sol": state.get("pool_sol"),
+        "total_distributed_sol": state.get("total_distributed_sol", 0.0),
         "prize_sol": state.get("prize_sol"),
         "best_project": state.get("best_project"),
         "best_dev": state.get("best_dev"),
