@@ -2,7 +2,7 @@
 
 <img src="docs/treasur-banner.png" alt="Treasur — a coin backed by any asset you want" width="100%">
 
-# TREASUR
+# TREASUR.FUN
 
 **Asset-backed coin infrastructure on Solana**
 
