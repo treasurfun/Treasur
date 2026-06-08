@@ -10,11 +10,17 @@ automatically, on-chain, with no team in the middle.
 
 [**treasur.fun**](https://treasur.fun) · [Whitepaper](https://treasur.fun/whitepaper) · [Leaderboard](https://treasur.fun/leaderboard)
 
+[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+![License: MIT](https://img.shields.io/badge/License-MIT-3FB950.svg)
 ![Solana](https://img.shields.io/badge/Solana-mainnet-14F195?logo=solana&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)
+
+<br />
+
+<img src="docs/preview.png" alt="Treasur — back your coin with crypto, stocks & gold" width="100%" />
 
 </div>
 
@@ -220,6 +226,22 @@ vercel --prod
 | `POST` | `/api/launches/{id}/claim` | Claim cashback into an asset |
 | `POST` | `/api/launches/{id}/withdraw` | Withdraw SOL from a launch wallet |
 | `POST` | `/api/withdraw-all` | Withdraw across launches |
+
+## Roadmap
+
+- [x] Asset-backed launches — crypto, tokenized stocks, pre-IPO, gold
+- [x] Fair launch — dev buy burned, zero team allocation
+- [x] Pro-rata auto distribution + cashback mode
+- [x] 20% treasury → manual $TREASUR buyback & burn with on-chain proof
+- [x] Treasury leaderboard
+- [x] On-chain verification
+- [x] Whitepaper
+- [ ] Expanded asset registry — more verified, liquid tokens
+- [ ] USDC-paired launches (pending pump.fun V2 + provider support)
+- [ ] Automated buyback & burn once $TREASUR has a live Jupiter route
+- [ ] Daily top-burner competition — prize pool for the top projects
+- [ ] Exclude migrated AMM pools from distribution
+- [ ] Holder analytics dashboard
 
 ## Security
 
