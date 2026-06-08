@@ -80,3 +80,27 @@ def exists(wallet: str) -> bool:
 
 def get_name(wallet: str) -> str:
     return _load().get(wallet.strip(), {}).get("name", "")
+
+
+# ── Privy-based users (no password; identity comes from a verified Privy token) ──
+def upsert_privy(wallet: str, name: str = "", twitter: str = "") -> None:
+    """Create or update a user keyed by wallet for Privy login. Stores the X/Twitter
+    handle (if linked) so launches can attribute the creator. No password is set."""
+    wallet = wallet.strip()
+    if not valid_wallet(wallet):
+        raise ValueError("Invalid Solana wallet address.")
+    with _lock:
+        users = _load()
+        u = users.get(wallet, {})
+        u.setdefault("created_at", time.time())
+        u["provider"] = "privy"
+        if name:
+            u["name"] = name.strip()[:40]
+        # always refresh twitter from the latest login (may be linked/unlinked over time)
+        u["twitter"] = (twitter or "").lstrip("@").strip()[:40]
+        users[wallet] = u
+        _save(users)
+
+
+def get_twitter(wallet: str) -> str:
+    return _load().get(wallet.strip(), {}).get("twitter", "")

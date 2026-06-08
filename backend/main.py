@@ -22,7 +22,7 @@ from models import (
 )
 import storage
 from storage import encrypt_secret, decrypt_secret, save_launch, load_launch, list_launches, find_by_mint
-from services import solana_client, cashback, users, jupiter
+from services import solana_client, cashback, users, jupiter, competition, privy_auth
 from orchestrator import start_launch, resume_pending
 from auth import issue_token, current_user, require_admin
 from assets import ASSETS, all_symbols
@@ -56,6 +56,10 @@ def _resume_on_startup():
         resume_pending()
     except Exception as e:  # noqa: BLE001
         print(f"[startup] resume_pending failed: {e}")
+    try:
+        competition.start_scheduler()
+    except Exception as e:  # noqa: BLE001
+        print(f"[startup] competition scheduler failed: {e}")
 
 
 @app.get("/api/health")
@@ -93,6 +97,37 @@ def login(body: dict):
     return {"token": issue_token(wallet, is_admin=False), "name": users.get_name(wallet)}
 
 
+@app.post("/api/auth/privy")
+def auth_privy(body: dict):
+    """Exchange a verified Privy access token for a session token.
+
+    Verifies the token (Phantom / email code / X login all produce one), looks up
+    the user's Solana wallet + X handle from Privy, and issues our bearer token
+    keyed to that wallet — same identity model as before, just nicer login."""
+    token = (body.get("token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing Privy token.")
+    try:
+        did = privy_auth.verify_token(token)
+    except Exception as e:  # noqa: BLE001
+        print(f"[privy] token verify failed: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=401, detail="Could not verify Privy login.")
+    try:
+        info = privy_auth.fetch_user(did)
+    except Exception as e:  # noqa: BLE001
+        print(f"[privy] user fetch failed: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=502, detail="Could not load your Privy profile.")
+    wallet = (info.get("wallet") or "").strip()
+    if not wallet:
+        raise HTTPException(status_code=400, detail="No Solana wallet on your Privy account yet.")
+    twitter = info.get("twitter") or ""
+    try:
+        users.upsert_privy(wallet, name=twitter or "", twitter=twitter)
+    except Exception as e:  # noqa: BLE001
+        print(f"[privy] upsert failed: {type(e).__name__}: {e}")
+    return {"token": issue_token(wallet, is_admin=False), "wallet": wallet, "twitter": twitter}
+
+
 @app.post("/api/launches", response_model=CreateLaunchResponse)
 def create_launch(req: CreateLaunchRequest, user: dict = Depends(current_user)):
     bad = [s for s in req.config.payout_assets if s.upper() not in all_symbols()]
@@ -110,6 +145,13 @@ def create_launch(req: CreateLaunchRequest, user: dict = Depends(current_user)):
     pubkey, secret_b58 = solana_client.new_wallet()
     launch_id = _secrets.token_urlsafe(9)
     required = _settings.MIN_FUNDING_SOL  # deploy cost + dev buy (no platform fee)
+
+    # attribute the launching dev's X handle (server-side, from their Privy profile)
+    if req.config.show_creator_twitter:
+        handle = users.get_twitter(user["sub"])
+        req.config.creator_twitter = handle or None
+    else:
+        req.config.creator_twitter = None
 
     record = LaunchRecord(
         launch_id=launch_id,
@@ -279,6 +321,7 @@ def public_feed():
             "image_url": r.config.image_url,
             "assets": r.config.payout_assets,
             "status": r.status,
+            "creator_twitter": (r.config.creator_twitter if r.config.show_creator_twitter else None),
         }
         for r in rows[:24]
     ]
@@ -311,11 +354,61 @@ def leaderboard():
             "mint": r.mint,
             "image_url": r.config.image_url,
             "twitter": r.config.twitter,
+            "creator_twitter": (r.config.creator_twitter if r.config.show_creator_twitter else None),
             "treasury_usd": round(usd, 2),
             "treasury_sol": round(lamports / 1e9, 4),
         })
     out.sort(key=lambda x: x["treasury_usd"], reverse=True)
     return out[:100]
+
+
+@app.get("/api/leaderboard/devs")
+def leaderboard_devs():
+    """Devs (creator wallets) ranked by total $ their launches sent to the treasury."""
+    agg: dict[str, dict] = {}
+    for r in list_launches():
+        if not r.mint or not r.owner:
+            continue
+        a = agg.setdefault(r.owner, {"usd": 0.0, "lamports": 0, "projects": 0})
+        a["usd"] += getattr(r, "treasury_sent_usd", 0.0)
+        a["lamports"] += getattr(r, "treasury_sent_lamports", 0)
+        a["projects"] += 1
+    need_px = any(v["usd"] <= 0 and v["lamports"] for v in agg.values())
+    try:
+        sol_px = jupiter.token_price_usdc(_SOL_MINT, 9) if need_px else 0.0
+    except Exception:  # noqa: BLE001
+        sol_px = 0.0
+    out = []
+    for owner, v in agg.items():
+        usd = v["usd"]
+        if usd <= 0 and v["lamports"] and sol_px > 0:
+            usd = v["lamports"] / 1e9 * sol_px
+        out.append({
+            "owner": owner,
+            "treasury_usd": round(usd, 2),
+            "treasury_sol": round(v["lamports"] / 1e9, 4),
+            "projects": v["projects"],
+        })
+    out.sort(key=lambda x: x["treasury_usd"], reverse=True)
+    return out[:100]
+
+
+@app.get("/api/competition")
+def competition_status():
+    """Daily competition status: last winners, prize, and when the next payout is due."""
+    state = storage.load_competition()
+    last = state.get("last_run_ts") or 0
+    interval = _settings.COMPETITION_INTERVAL_SECONDS
+    return {
+        "active": bool(_settings.MAIN_TOKEN_MINT),
+        "interval_seconds": interval,
+        "project_pct": _settings.COMPETITION_PROJECT_PCT,
+        "last_run_ts": last or None,
+        "next_run_ts": (last + interval) if last else None,
+        "prize_sol": state.get("prize_sol"),
+        "best_project": state.get("best_project"),
+        "best_dev": state.get("best_dev"),
+    }
 
 
 @app.get("/api/launches/{launch_id}")

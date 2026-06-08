@@ -224,6 +224,22 @@ def _track_treasury(record: LaunchRecord, sol_amount: float) -> None:
         pass
 
 
+def _buyback_burn_main(record: LaunchRecord, secret: str, lamports: int) -> int:
+    """Buy $TREASUR (MAIN_TOKEN_MINT) with `lamports` and burn what was bought.
+    Requires $TREASUR to be Jupiter-routable. Returns the raw amount burned."""
+    mint = _settings.MAIN_TOKEN_MINT
+    c = solana_client.client()
+    decimals, program_id = distribution._mint_info(c, mint)
+    before = solana_client.get_token_balance_raw(record.deposit_wallet, mint, program_id)
+    jupiter.swap_sol_to_asset(secret, mint, lamports)
+    time.sleep(6)
+    after = solana_client.get_token_balance_raw(record.deposit_wallet, mint, program_id)
+    bought = after - before
+    if bought > 0:
+        solana_client.burn_all(secret, mint, decimals, bought)
+    return bought
+
+
 def _route_treasury_share(record: LaunchRecord, secret: str, sol_amount: float) -> None:
     """Treasury share of each coin's fees. Controlled by TREASURY_MODE:
       - "wallet"     -> send the SOL to TREASURY_WALLET; team buys back & burns $TREASUR manually.
@@ -253,6 +269,40 @@ def _route_treasury_share(record: LaunchRecord, secret: str, sol_amount: float) 
         except Exception as e:  # noqa: BLE001
             _log(record, f"treasury distribute failed ({e}); routing to wallet instead")
             # fall through to the wallet path so the share is not lost
+
+    # --- split mode: part buys & burns $TREASUR, the rest buys TREASURY_ASSET for $TREASUR holders ---
+    if _settings.TREASURY_MODE == "split" and main_mint:
+        pct = max(0, min(100, _settings.TREASURY_SPLIT_BURN_PCT))
+        burn_sol = round(sol_amount * pct / 100, 9)
+        dist_sol = round(sol_amount - burn_sol, 9)
+        done = 0.0
+        # leg 1: buy TREASURY_ASSET -> distribute to $TREASUR holders
+        if dist_sol > 0.0005 and _settings.TREASURY_ASSET:
+            try:
+                asset_mint = resolve_mint(_settings.TREASURY_ASSET)
+                if not asset_mint:
+                    raise ValueError(f"unknown TREASURY_ASSET '{_settings.TREASURY_ASSET}'")
+                jupiter.swap_sol_to_asset(secret, asset_mint, int(dist_sol * LAMPORTS_PER_SOL))
+                time.sleep(6)
+                holders = _eligible_holders(main_mint)
+                holders.pop(_settings.TREASURY_WALLET, None)
+                sent = distribution.distribute_asset(secret, asset_mint, holders)
+                done += dist_sol
+                _log(record, f"Treasury {dist_sol:.4f} SOL -> {_settings.TREASURY_ASSET} to {len(sent)} $TREASUR holder(s)")
+            except Exception as e:  # noqa: BLE001
+                _log(record, f"treasury {_settings.TREASURY_ASSET} leg failed: {e}")
+        # leg 2: buy & burn $TREASUR
+        if burn_sol > 0.0005:
+            try:
+                burned = _buyback_burn_main(record, secret, int(burn_sol * LAMPORTS_PER_SOL))
+                done += burn_sol
+                _log(record, f"Treasury {burn_sol:.4f} SOL -> bought & burned {burned} $TREASUR")
+            except Exception as e:  # noqa: BLE001
+                _log(record, f"treasury $TREASUR buy-burn leg failed: {e}")
+        if done > 0:
+            _track_treasury(record, done)
+            return
+        # both legs failed -> fall through to wallet
 
     # --- wallet mode (default / fallback) ---
     if not _settings.TREASURY_WALLET:

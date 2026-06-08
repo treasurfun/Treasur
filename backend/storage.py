@@ -80,3 +80,25 @@ def find_by_mint(mint: str) -> Optional[LaunchRecord]:
         if rec.mint == mint:
             return rec
     return None
+
+
+# ── Competition state (single small JSON: last run + last winners) ──
+_COMPETITION_FILE = os.path.join(_settings.DATA_DIR, "competition.json")
+
+
+def load_competition() -> dict:
+    """Last competition state: {last_run_ts, prize_sol, best_project, best_dev}."""
+    try:
+        with open(_COMPETITION_FILE, "r") as f:
+            return json.load(f)
+    except Exception:  # noqa: BLE001 — missing/corrupt -> fresh state
+        return {}
+
+
+def save_competition(state: dict) -> None:
+    with _lock:
+        _ensure_dirs()
+        tmp = _COMPETITION_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(state, f)
+        os.replace(tmp, _COMPETITION_FILE)

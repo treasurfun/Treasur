@@ -26,6 +26,10 @@ class TokenConfig(BaseModel):
     twitter: Optional[str] = None
     telegram: Optional[str] = None
     website: Optional[str] = None
+    # show the launching dev's own X/Twitter on the coin (default on). The handle is
+    # filled in server-side from the creator's Privy profile — never trusted from the client.
+    show_creator_twitter: bool = True
+    creator_twitter: Optional[str] = None
     # which assets to buy and distribute, e.g. ["BTC", "AAPL"] (max 3)
     payout_assets: list[str] = Field(default_factory=list)
     # optional per-asset split in percent, e.g. {"BTC": 50, "ETH": 50}.
@@ -69,6 +73,7 @@ class LaunchRecord(BaseModel):
     cashback_pool_lamports: int = 0                   # total fees routed to holders
     treasury_sent_lamports: int = 0                   # cumulative SOL (raw) sent to treasury (the 20% share)
     treasury_sent_usd: float = 0.0                    # cumulative USD value of treasury cuts (captured at transfer)
+    treasury_snapshot_lamports: int = 0               # cumulative at last competition payout (for per-period deltas)
     holders: dict[str, HolderState] = Field(default_factory=dict)
     log: list[str] = Field(default_factory=list)      # live launch console lines
     error: Optional[str] = None

@@ -57,9 +57,28 @@ class Settings:
     # What happens to the treasury share:
     #   "wallet"     -> send it to TREASURY_WALLET; team buys back & burns $TREASUR manually (posts Solscan)  [default]
     #   "distribute" -> auto-buy TREASURY_ASSET and distribute it pro-rata to $TREASUR holders
-    #                   (requires MAIN_TOKEN_MINT; falls back to "wallet" if it isn't set yet)
+    #   "split"      -> do BOTH: part buys back & burns $TREASUR, the rest buys TREASURY_ASSET for $TREASUR holders
+    #                   (distribute/split need MAIN_TOKEN_MINT; fall back to "wallet" if it isn't set yet)
     TREASURY_MODE: str = os.getenv("TREASURY_MODE", "wallet")
-    TREASURY_ASSET: str = os.getenv("TREASURY_ASSET", "SPACEX")           # asset paid to $TREASUR holders in distribute mode
+    TREASURY_ASSET: str = os.getenv("TREASURY_ASSET", "SPACEX")           # asset paid to $TREASUR holders in distribute/split mode
+    TREASURY_SPLIT_BURN_PCT: int = int(os.getenv("TREASURY_SPLIT_BURN_PCT", "50"))  # split mode: % of the share that buys & burns $TREASUR; the rest buys TREASURY_ASSET for holders
+
+    # Daily competition: $TREASUR's OWN creator fees form a prize pool, split between the
+    # top project (most contributed to the treasury this period) and the top dev (best owner total).
+    # Activates automatically once MAIN_TOKEN_MINT is set AND $TREASUR was launched through Treasur
+    # (so its creator wallet is platform-controlled and its fees can be claimed).
+    COMPETITION_INTERVAL_SECONDS: int = int(os.getenv("COMPETITION_INTERVAL_SECONDS", "86400"))  # 24h; 172800 = every other day
+    COMPETITION_PROJECT_PCT: int = int(os.getenv("COMPETITION_PROJECT_PCT", "50"))  # % of the prize to Best Project; rest to Best Dev
+
+    # ── Privy authentication (Phantom + email code + Twitter) ──
+    # APP ID is public (it ships in the frontend bundle); APP SECRET must come from the
+    # Railway env and is never committed. Verification key is a public key from the Privy
+    # dashboard — if set, the access-token JWT is verified locally without a JWKS fetch.
+    PRIVY_APP_ID: str = os.getenv("PRIVY_APP_ID", "cmq56wpb200170djmlxb2f1a4")
+    PRIVY_APP_SECRET: str = os.getenv("PRIVY_APP_SECRET", "")
+    PRIVY_VERIFICATION_KEY: str = os.getenv("PRIVY_VERIFICATION_KEY", "")  # optional PEM; else JWKS is used
+    PRIVY_JWKS_URL: str = os.getenv("PRIVY_JWKS_URL", "")                  # optional override; else derived from app id
+    PRIVY_API_BASE: str = os.getenv("PRIVY_API_BASE", "https://auth.privy.io/api/v1")
     SWAP_SLIPPAGE_BPS: int = int(os.getenv("SWAP_SLIPPAGE_BPS", "300"))  # 3%
     # Minimum holding (in USD) to be eligible for distributions ("$10 worth").
     MIN_HOLD_USD: float = float(os.getenv("MIN_HOLD_USD", "10"))
