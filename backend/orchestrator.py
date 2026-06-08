@@ -141,6 +141,11 @@ def _run(record: LaunchRecord) -> None:
     _set(record, LaunchStatus.DISTRIBUTING)
     if cashback_mode and record.cycles_done == 0:
         cashback.snapshot_and_accrue(record, 0)  # seed holder streaks at t0
+    # let the coin trade & creator fees accrue before the FIRST distribution, so holders
+    # have time to get in (skipped on resume, where cycles_done > 0)
+    if record.cycles_done == 0 and _settings.FIRST_CYCLE_DELAY_SECONDS > 0:
+        _log(record, f"[waiting] first distribution in ~{_settings.FIRST_CYCLE_DELAY_SECONDS // 60} min — letting the coin trade and fees build")
+        time.sleep(_settings.FIRST_CYCLE_DELAY_SECONDS)
     for cycle in range(record.cycles_done, _settings.DISTRIBUTION_CYCLES):
         cycle_pool_lamports = 0
         try:

@@ -86,7 +86,8 @@ class Settings:
     # Concurrency
     MAX_CONCURRENT_LAUNCHES: int = int(os.getenv("MAX_CONCURRENT_LAUNCHES", "20"))
     DISTRIBUTION_CYCLES: int = int(os.getenv("DISTRIBUTION_CYCLES", "5"))
-    CYCLE_INTERVAL_SECONDS: int = int(os.getenv("CYCLE_INTERVAL_SECONDS", "3600"))
+    CYCLE_INTERVAL_SECONDS: int = int(os.getenv("CYCLE_INTERVAL_SECONDS", "900"))   # gap between cycles (15 min)
+    FIRST_CYCLE_DELAY_SECONDS: int = int(os.getenv("FIRST_CYCLE_DELAY_SECONDS", "300"))  # wait before the FIRST distribution (5 min) so the coin trades & holders can get in
 
     # Distribution model
     # "auto"     => creator picks the asset basket + weights; fees buy that basket

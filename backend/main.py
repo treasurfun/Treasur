@@ -412,6 +412,7 @@ def leaderboard_devs():
             usd = v["lamports"] / 1e9 * sol_px
         out.append({
             "owner": owner,
+            "twitter": users.get_twitter(owner) or None,
             "treasury_usd": round(usd, 2),
             "treasury_sol": round(v["lamports"] / 1e9, 4),
             "projects": v["projects"],
