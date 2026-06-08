@@ -46,7 +46,7 @@ class Settings:
     # Burn the dev-buy tokens after creation -> 0 dev supply ("can't rug"). The
     # trust signal, not the SOL amount, is the point. Set false to keep them.
     BURN_DEV_BUY: bool = os.getenv("BURN_DEV_BUY", "true").lower() == "true"
-    MIN_FUNDING_SOL: float = float(os.getenv("MIN_FUNDING_SOL", "0.05"))   # ~deploy + gas, no markup
+    MIN_FUNDING_SOL: float = float(os.getenv("MIN_FUNDING_SOL", "0.1"))    # required to deploy a coin
     PLATFORM_FEE_SOL: float = float(os.getenv("PLATFORM_FEE_SOL", "0"))    # flat fee (0 = off)
     # Split of each coin's ongoing creator fees:
     #   BURN_FEE_BPS  -> sent to TREASURY_WALLET (team buys back & burns $TREASUR manually, posts Solscan)
