@@ -52,49 +52,15 @@ ASSETS = {
         "CRWD": "Xs7xXqkcK7K8urEqGg52SECi79dRp2cEKKuYjUePYDw",
         "CMCSA": "XsvKCaNsxg2GN8jjUmq71qukMJr7Q1c5R2Mk9P8kcS8",
         "SP500": "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W",  # SPYx (S&P 500 ETF)
-        # ── added xStocks — official mints from solana.com/news/case-study-xstocks
-        #    (each verifiable on Solscan; Token-2022, same as the rest of this group) ──
+        # ── user-selected additions (xStocks Token-2022; VERIFY each on Solscan/Jupiter before live) ──
         "COIN": "Xs7ZdzSHLU9ftNJsii5fCeJhoRWSC32SQGzGQtePxNu",   # Coinbase
-        "CRCL": "XsueG8BtpquVJX9LVLLEGuViXUungE6WmK5YZ3p3bd1",   # Circle
         "PLTR": "XsoBhf2ufR8fTyNSjqfU71DYGaE6Z3SUGAidpzriAA4",   # Palantir
-        "APP": "XsPdAVBi8Zc1xvv53k4JcMrQaEDTgkGqKYeh7AYgPHV",    # AppLovin
         "ORCL": "XsjFwUPiLofddX5cWFHW35GCbXcSu1BCUGfxoQAQjeL",   # Oracle
-        "INTC": "XshPgPdXFRWB8tP1j82rebb2Q9rPgGX37RuqzohmArM",   # Intel
-        "IBM": "XspwhyYPdWVM8XBHZnpS9hgyag9MKjLRyE3tVfmCbSr",    # IBM
-        "CSCO": "Xsr3pdLQyXvDJBFgpR5nexCEZwXvigb8wbPYp4YoNFf",   # Cisco
-        "MRVL": "XsuxRGDzbLjnJ72v74b7p9VY6N66uYgTCyfwwRjVCJA",   # Marvell
-        "JPM": "XsMAqkcKsUewDrzVkait4e5u4y8REgtyS7jWgCpLV2C",    # JPMorgan Chase
-        "BAC": "XswsQk4duEQmCbGzfqUUWYmi7pV7xpJ9eEmLHXCaEQP",    # Bank of America
+        "JPM": "XsMAqkcKsUewDrzVkait4e5u4y8REgtyS7jWgCpLV2C",    # JPMorgan
         "GS": "XsgaUyp4jd1fNBCxgtTKkW64xnnhQcvgaxzsbAq5ZD1",     # Goldman Sachs
         "MA": "XsApJFV9MAktqnAc6jqzsHVujxkGm9xcSUffaBoYLKC",     # Mastercard
-        "BRKB": "Xs6B6zawENwAbWVi7w92rjazLuAr5Az59qgWKcNb45x",   # Berkshire Hathaway (BRK.B)
-        "KO": "XsaBXg8dU5cPM6ehmVctMkVqoiRG2ZjMo1cyBJ3AykQ",     # Coca-Cola
-        "PEP": "Xsv99frTRUeornyvCfvhnDesQDWuvns1M852Pez91vF",    # PepsiCo
-        "MCD": "XsqE9cRRpzxcGKDXj1BJ7Xmg4GRhZoyY1KpmGSxAWT2",    # McDonald's
-        "WMT": "Xs151QeqTCiuKtinzfRATnUESM2xTU6V9Wy8Vy538ci",    # Walmart
-        "HD": "XszjVtyhowGjSC5odCqBpW1CtXXwXjYokymrk7fGKD3",     # Home Depot
-        "PG": "XsYdjDjNUygZ7yGKfQaB6TxLh2gC6RRjzLtLAGJrhzV",     # Procter & Gamble
-        "PM": "Xsba6tUnSjDae2VcopDB6FGGDaxRrewFCDa5hKn5vT3",     # Philip Morris
         "JNJ": "XsGVi5eo1Dh2zUpic4qACcjuWGjNv8GCt3dm5XcX6Dn",    # Johnson & Johnson
-        "PFE": "XsAtbqkAP1HJxy7hFDeq7ok6yM43DQ9mQ1Rh861X8rw",    # Pfizer
-        "LLY": "Xsnuv4omNoHozR6EEW5mXkw8Nrny5rB3jVfLqi6gKMH",    # Eli Lilly
-        "MRK": "XsnQnU7AdbRZYe2akqqpibDdXjkieGFfSkbkjX1Sd1X",    # Merck
-        "UNH": "XszvaiXGPwvk2nwb3o9C1CX4K6zH8sez11E6uyup6fe",    # UnitedHealth
-        "ABBV": "XswbinNKyPmzTa5CskMbCPvMW6G5CMnZXZEeQSSQoie",   # AbbVie
-        "ABT": "XsHtf5RpxsQ7jeJ9ivNewouZKJHbPxhPoEy6yYvULr7",    # Abbott
-        "DHR": "Xseo8tgCZfkHxWS9xbFYeKFyMSbWEvZGFV1Gh53GtCV",    # Danaher
-        "MDT": "XsDgw22qRLTv5Uwuzn6T63cW69exG41T6gwQhEK22u2",    # Medtronic
-        "TMO": "Xs8drBWy3Sd5QY3aifG9kt9KFs2K3PGZmx7jWrsrk57",    # Thermo Fisher
-        "NVO": "XsfAzPzYrYjd4Dpa9BU3cusBsvWfVB9gBcyGC87S57n",    # Novo Nordisk
-        "AZN": "Xs3ZFkPYT2BN7qBMqf1j1bfTeTm1rFzEFSsQ1z3wAKU",    # AstraZeneca
-        "ACN": "Xs5UJzmCRQ8DWZjskExdSQDnbE6iLkRu2jjrRAB1JSU",    # Accenture
-        "HON": "XsRbLZthfABAPAfumWNEJhPyiKDW6TvDVeAeW7oKqA2",    # Honeywell
-        "LIN": "XsSr8anD1hkvNMu8XQiVcmiaTP7XGvYu7Q58LdmtE8Z",    # Linde
-        "XOM": "XsaHND8sHyfMfsWPj6kSdd5VwvCayZvjYgKmmcNL5qh",    # Exxon Mobil
-        "CVX": "XsNNMt7WTNA2sV3jrb1NNfNgapxRF5i4i6GcnTRRHts",    # Chevron
-        "QQQ": "Xs8S1uUs1zvS2p7iwtsG3b6fkhpvmwz4GYU3gWAmWHZ",    # Nasdaq-100 ETF
-        "VTI": "XsssYEQjzxBCFgvYFFNuhJFBeHNdLWYeUSP8F45cDr9",    # Vanguard Total US Market ETF
-        "SNDK": "",  # no xStock issued for SanDisk yet — leave blank
+        "WMT": "Xs151QeqTCiuKtinzfRATnUESM2xTU6V9Wy8Vy538ci",    # Walmart
     },
     # PreStocks pre-IPO (classic SPL, traded on Jupiter). Mints from prestocks.com/products.
     "stocks_preipo": {
