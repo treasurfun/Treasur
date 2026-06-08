@@ -109,7 +109,7 @@ def create_launch(req: CreateLaunchRequest, user: dict = Depends(current_user)):
 
     pubkey, secret_b58 = solana_client.new_wallet()
     launch_id = _secrets.token_urlsafe(9)
-    required = _settings.MIN_FUNDING_SOL  # min 0.2 SOL = flat fee + dev buy + basket
+    required = _settings.MIN_FUNDING_SOL  # deploy cost + dev buy (no platform fee)
 
     record = LaunchRecord(
         launch_id=launch_id,

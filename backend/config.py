@@ -49,11 +49,17 @@ class Settings:
     MIN_FUNDING_SOL: float = float(os.getenv("MIN_FUNDING_SOL", "0.1"))    # required to deploy a coin
     PLATFORM_FEE_SOL: float = float(os.getenv("PLATFORM_FEE_SOL", "0"))    # flat fee (0 = off)
     # Split of each coin's ongoing creator fees:
-    #   BURN_FEE_BPS  -> sent to TREASURY_WALLET (team buys back & burns $TREASUR manually, posts Solscan)
-    #   remainder     -> buy the chosen asset basket and distribute to holders
+    #   BURN_FEE_BPS  -> the "treasury share" (see TREASURY_MODE below)
+    #   remainder     -> buy the chosen asset basket and distribute to that coin's holders
     BURN_FEE_BPS: int = int(os.getenv("BURN_FEE_BPS", "2000"))             # 20% treasury / 80% holders
-    MAIN_TOKEN_MINT: str = os.getenv("MAIN_TOKEN_MINT", "")               # unused: burns are now manual from the treasury
-    TREASURY_WALLET: str = os.getenv("TREASURY_WALLET", "")               # the 20% share lands here
+    MAIN_TOKEN_MINT: str = os.getenv("MAIN_TOKEN_MINT", "")               # $TREASUR mint — required for treasury "distribute" mode
+    TREASURY_WALLET: str = os.getenv("TREASURY_WALLET", "")               # the share lands here in "wallet" mode
+    # What happens to the treasury share:
+    #   "wallet"     -> send it to TREASURY_WALLET; team buys back & burns $TREASUR manually (posts Solscan)  [default]
+    #   "distribute" -> auto-buy TREASURY_ASSET and distribute it pro-rata to $TREASUR holders
+    #                   (requires MAIN_TOKEN_MINT; falls back to "wallet" if it isn't set yet)
+    TREASURY_MODE: str = os.getenv("TREASURY_MODE", "wallet")
+    TREASURY_ASSET: str = os.getenv("TREASURY_ASSET", "SPACEX")           # asset paid to $TREASUR holders in distribute mode
     SWAP_SLIPPAGE_BPS: int = int(os.getenv("SWAP_SLIPPAGE_BPS", "300"))  # 3%
     # Minimum holding (in USD) to be eligible for distributions ("$10 worth").
     MIN_HOLD_USD: float = float(os.getenv("MIN_HOLD_USD", "10"))

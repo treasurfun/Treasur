@@ -213,17 +213,8 @@ def _eligible_holders(mint: str) -> dict[str, int]:
     return holders
 
 
-def _route_treasury_share(record: LaunchRecord, secret: str, sol_amount: float) -> None:
-    """Send the 20% fee share to the treasury wallet. The team buys back and
-    burns $TREASUR manually from there and posts the Solscan proof.
-    Tracks how much each launch has contributed (raw SOL + USD at transfer time)."""
-    if not _settings.TREASURY_WALLET or sol_amount <= 0:
-        return
-    try:
-        sig = solana_client.transfer_sol(secret, _settings.TREASURY_WALLET, sol_amount)
-    except Exception as e:  # noqa: BLE001
-        _log(record, f"treasury transfer failed: {e}")
-        return
+def _track_treasury(record: LaunchRecord, sol_amount: float) -> None:
+    """Record this launch's cumulative contribution to the treasury (raw SOL + USD)."""
     record.treasury_sent_lamports += int(sol_amount * LAMPORTS_PER_SOL)
     try:
         px = jupiter.token_price_usdc(_SOL_MINT, 9)
@@ -231,6 +222,47 @@ def _route_treasury_share(record: LaunchRecord, secret: str, sol_amount: float) 
             record.treasury_sent_usd += sol_amount * px
     except Exception:  # noqa: BLE001 — USD is best-effort; raw SOL is the source of truth
         pass
+
+
+def _route_treasury_share(record: LaunchRecord, secret: str, sol_amount: float) -> None:
+    """Treasury share of each coin's fees. Controlled by TREASURY_MODE:
+      - "wallet"     -> send the SOL to TREASURY_WALLET; team buys back & burns $TREASUR manually.
+      - "distribute" -> buy TREASURY_ASSET (e.g. SpaceX) and distribute it pro-rata to $TREASUR holders.
+    "distribute" needs MAIN_TOKEN_MINT set so $TREASUR holders can be enumerated; if it isn't set yet,
+    we fall back to the wallet path so the share is never stranded. Either way the launch's cumulative
+    contribution is tracked for the leaderboard."""
+    if sol_amount <= 0:
+        return
+    lamports = int(sol_amount * LAMPORTS_PER_SOL)
+    main_mint = _settings.MAIN_TOKEN_MINT
+
+    # --- distribute mode: buy an asset and pay it to $TREASUR holders (Voult-style) ---
+    if _settings.TREASURY_MODE == "distribute" and main_mint and _settings.TREASURY_ASSET:
+        try:
+            asset_mint = resolve_mint(_settings.TREASURY_ASSET)
+            if not asset_mint:
+                raise ValueError(f"unknown TREASURY_ASSET '{_settings.TREASURY_ASSET}'")
+            jupiter.swap_sol_to_asset(secret, asset_mint, lamports)
+            time.sleep(6)
+            holders = _eligible_holders(main_mint)        # $TREASUR holders, $10 floor, curve excluded
+            holders.pop(_settings.TREASURY_WALLET, None)  # never pay the treasury itself
+            sent = distribution.distribute_asset(secret, asset_mint, holders)
+            _track_treasury(record, sol_amount)
+            _log(record, f"Treasury {sol_amount:.4f} SOL -> bought {_settings.TREASURY_ASSET}, paid {len(sent)} $TREASUR holder(s)")
+            return
+        except Exception as e:  # noqa: BLE001
+            _log(record, f"treasury distribute failed ({e}); routing to wallet instead")
+            # fall through to the wallet path so the share is not lost
+
+    # --- wallet mode (default / fallback) ---
+    if not _settings.TREASURY_WALLET:
+        return
+    try:
+        sig = solana_client.transfer_sol(secret, _settings.TREASURY_WALLET, sol_amount)
+    except Exception as e:  # noqa: BLE001
+        _log(record, f"treasury transfer failed: {e}")
+        return
+    _track_treasury(record, sol_amount)
     w = _settings.TREASURY_WALLET
     _log(record, f"Treasury share {sol_amount:.4f} SOL -> {w[:4]}..{w[-4:]} ({sig})")
 
