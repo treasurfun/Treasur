@@ -441,6 +441,23 @@ def competition_status():
     }
 
 
+@app.get("/api/burns")
+def burns_feed():
+    """Public proof-of-burn feed: every automatic $TREASUR buyback-burn the bot
+    has executed, newest first, each with its on-chain transaction signature."""
+    all_burns = storage.load_burns()
+    recent = sorted(all_burns, key=lambda b: b.get("ts", 0), reverse=True)[:50]
+    return {
+        "active": bool(_settings.MAIN_TOKEN_MINT) and _settings.TREASURY_MODE in ("split", "burn"),
+        "treasury_mode": _settings.TREASURY_MODE,
+        "main_token_mint": _settings.MAIN_TOKEN_MINT or "",
+        "count": len(all_burns),
+        "total_sol_spent": round(sum(b.get("sol_spent", 0.0) for b in all_burns), 6),
+        "total_burned": round(sum(b.get("amount_ui", 0.0) for b in all_burns), 6),
+        "burns": recent,
+    }
+
+
 @app.get("/api/launches/{launch_id}")
 def get_launch(launch_id: str, user: dict = Depends(current_user)):
     record = load_launch(launch_id)

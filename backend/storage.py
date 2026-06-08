@@ -102,3 +102,37 @@ def save_competition(state: dict) -> None:
         with open(tmp, "w") as f:
             json.dump(state, f)
         os.replace(tmp, _COMPETITION_FILE)
+
+
+# --- automatic buyback-burn proof feed -------------------------------------
+_BURNS_FILE = os.path.join(_settings.DATA_DIR, "burns.json")
+_BURNS_CAP = 300
+
+
+def load_burns() -> list:
+    """All recorded automatic buyback-burn events (oldest first)."""
+    try:
+        with open(_BURNS_FILE, "r") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except Exception:  # noqa: BLE001 — missing/corrupt -> empty
+        return []
+
+
+def append_burn(event: dict) -> None:
+    """Append one burn event, keeping only the most recent _BURNS_CAP."""
+    with _lock:
+        _ensure_dirs()
+        try:
+            with open(_BURNS_FILE, "r") as f:
+                data = json.load(f)
+                if not isinstance(data, list):
+                    data = []
+        except Exception:  # noqa: BLE001
+            data = []
+        data.append(event)
+        data = data[-_BURNS_CAP:]
+        tmp = _BURNS_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp, _BURNS_FILE)

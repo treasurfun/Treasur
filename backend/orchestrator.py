@@ -13,7 +13,7 @@ import traceback
 
 from config import get_settings
 from models import LaunchRecord, LaunchStatus
-from storage import save_launch, decrypt_secret, list_launches
+from storage import save_launch, decrypt_secret, list_launches, append_burn
 from assets import resolve_mint
 from services import solana_client, pumpfun, jupiter, helius, distribution, cashback
 from solders.pubkey import Pubkey as _Pubkey
@@ -241,7 +241,20 @@ def _buyback_burn_main(record: LaunchRecord, secret: str, lamports: int) -> int:
     after = solana_client.get_token_balance_raw(record.deposit_wallet, mint, program_id)
     bought = after - before
     if bought > 0:
-        solana_client.burn_all(secret, mint, decimals, bought)
+        sig = solana_client.burn_all(secret, mint, decimals, bought)
+        try:
+            append_burn({
+                "ts": int(time.time()),
+                "mint": mint,
+                "amount_raw": int(bought),
+                "amount_ui": bought / (10 ** decimals),
+                "sol_spent": round(lamports / LAMPORTS_PER_SOL, 9),
+                "signature": sig,
+                "source_mint": record.mint,
+                "source_symbol": getattr(record.config, "symbol", "") or "",
+            })
+        except Exception:  # noqa: BLE001 — proof logging must never block the burn
+            pass
     return bought
 
 
