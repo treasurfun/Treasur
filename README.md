@@ -149,52 +149,6 @@ npm run dev                   # dev server
 # point the API base in src/api.js (or the proxy) at your backend URL
 ```
 
-## Configuration
-
-All backend config is via environment variables. **Never commit real values** — keys
-below are names only.
-
-| Variable | Description |
-|----------|-------------|
-| `ENCRYPTION_KEY` | Fernet key encrypting launch wallet secrets at rest. **Never change once set.** |
-| `SECRET_KEY` | Session/token signing secret. |
-| `ADMIN_PASSWORD` | Password for the admin endpoints. |
-| `RPC_ENDPOINT` | Solana RPC URL (Helius). |
-| `HELIUS_API_KEY` | Helius key for holder enumeration. |
-| `PUMPDEV_API_URL` | pump.fun create + claim API (default `https://pumpdev.io`). |
-| `PUMPPORTAL_TRADE_URL` | PumpPortal local-trade endpoint. |
-| `PINATA_JWT` / `PINATA_GATEWAY` | IPFS metadata pinning + dedicated gateway for images. |
-| `JUPITER_QUOTE_URL` / `JUPITER_SWAP_URL` | Jupiter swap endpoints. |
-| `TREASURY_WALLET` | Wallet that receives the 20% fee share. |
-| `BURN_FEE_BPS` | Treasury share in basis points (`2000` = 20%). |
-| `MIN_FUNDING_SOL` | SOL required to deploy a coin (`0.1`). |
-| `DEV_BUY_SOL` / `BURN_DEV_BUY` | Dev-buy size and whether it's burned (fair launch). |
-| `DISTRIBUTION_MODE` | `auto` or `cashback`. |
-| `DISTRIBUTION_CYCLES` / `CYCLE_INTERVAL_SECONDS` | Number of cycles and spacing. |
-| `MIN_HOLD_USD` | Eligibility floor for distributions (USD). |
-| `SWAP_SLIPPAGE_BPS` / `TOKEN_DECIMALS` | Swap slippage and token decimals. |
-| `DATA_DIR` | Persistent data directory (`/data`). |
-| `SITE_NAME` | Display name used in generated metadata. |
-
-## Deployment
-
-### Backend → Railway
-
-- Service **Root Directory** = `backend`. Attach a **persistent volume mounted at `/data`**
-  (holds launch records and encrypted wallet keys — without it, every redeploy wipes them).
-- Set the environment variables above.
-- Deploy by pushing to the repo; Railway rebuilds automatically:
-
-```bash
-git add . && git commit -m "deploy" && git push
-```
-
-### Frontend → Vercel
-
-```bash
-cd frontend
-vercel --prod
-```
 
 ## API reference
 
@@ -252,13 +206,3 @@ vercel --prod
 - User passwords are PBKDF2-hashed; never stored in plaintext.
 - The treasury share goes to a wallet you control; the $TREASUR buyback & burn is
   performed manually from there, with each burn published on-chain.
-- Always run behind the persistent volume so wallet keys survive redeploys.
-
-## Disclaimer
-
-Treasur is experimental software for a volatile asset class. Memecoins can and
-frequently do go to zero; asset backing reduces but does not remove that risk, and the
-value of any backing depends on the market price and liquidity of the underlying
-assets. Tokenized stocks and pre-IPO tokens track a price and do not confer shareholder
-rights, dividends or legal ownership. Nothing here is financial, investment or legal
-advice.
