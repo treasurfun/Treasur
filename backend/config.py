@@ -33,6 +33,10 @@ class Settings:
 
     # Auth / admin
     ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "change-me")
+    # Privy logins (Phantom / X / email) become admin if their Solana wallet is in
+    # ADMIN_WALLETS or their X handle is in ADMIN_TWITTER (both comma-separated).
+    ADMIN_WALLETS: str = os.getenv("ADMIN_WALLETS", "")
+    ADMIN_TWITTER: str = os.getenv("ADMIN_TWITTER", "")
     SECRET_KEY: str = os.getenv("SECRET_KEY", "dev-secret-change-me")
     # Used to encrypt private keys at rest. MUST be a 32-byte urlsafe-base64 Fernet key.
     ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")

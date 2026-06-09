@@ -125,7 +125,11 @@ def auth_privy(body: dict):
         users.upsert_privy(wallet, name=twitter or "", twitter=twitter)
     except Exception as e:  # noqa: BLE001
         print(f"[privy] upsert failed: {type(e).__name__}: {e}")
-    return {"token": issue_token(wallet, is_admin=False), "wallet": wallet, "twitter": twitter}
+    # admin if this wallet or X handle is in the configured allowlist
+    admin_wallets = {w.strip() for w in (_settings.ADMIN_WALLETS or "").split(",") if w.strip()}
+    admin_handles = {t.strip().lstrip("@").lower() for t in (_settings.ADMIN_TWITTER or "").split(",") if t.strip()}
+    is_admin = (wallet in admin_wallets) or bool(twitter and twitter.lstrip("@").lower() in admin_handles)
+    return {"token": issue_token(wallet, is_admin=is_admin), "wallet": wallet, "twitter": twitter, "admin": is_admin}
 
 
 @app.post("/api/launches", response_model=CreateLaunchResponse)
