@@ -21,6 +21,7 @@ ASSETS = {
         "BTC": "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh",   # wrapped BTC (Portal) — verify
         "ETH": "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs",   # wrapped ETH (Portal) — verify
         "PUMP": "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn",
+        "HYPE": "98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g",   # Hyperliquid HYPE on Solana (Phantom/DexScreener id; mintable — verify)
         "USDC": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  # USDC mainnet — verify
     },
     "commodities": {
