@@ -11,6 +11,7 @@ Endpoints:
   GET  /api/assets            -> supported payout assets
 """
 import secrets as _secrets
+import time
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,7 +23,7 @@ from models import (
 )
 import storage
 from storage import encrypt_secret, decrypt_secret, save_launch, load_launch, list_launches, find_by_mint
-from services import solana_client, cashback, users, jupiter, competition, privy_auth
+from services import solana_client, cashback, users, jupiter, competition, privy_auth, pumpfun
 from orchestrator import start_launch, resume_pending
 from auth import issue_token, current_user, require_admin
 from assets import ASSETS, all_symbols
@@ -336,6 +337,64 @@ def withdraw_all(body: dict, user: dict = Depends(current_user)):
             item["error"] = str(e)[:200]
         results.append(item)
     return {"destination": dest, "total_sol": round(total, 9), "results": results}
+
+
+@app.post("/api/admin/claim-and-sweep")
+def admin_claim_and_sweep(body: dict, _: dict = Depends(require_admin)):
+    """Admin only: claim pump.fun creator fees on EVERY launch wallet, then sweep
+    all SOL from those wallets to one destination address."""
+    dest = (body.get("destination") or "").strip()
+    if not (32 <= len(dest) <= 44):
+        raise HTTPException(status_code=400, detail="Invalid destination address")
+    try:
+        from solders.pubkey import Pubkey as _Pk
+        _Pk.from_string(dest)
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="Invalid Solana address")
+
+    records = list_launches()
+    items = {
+        r.launch_id: {"launch_id": r.launch_id, "wallet": r.deposit_wallet, "symbol": r.config.symbol}
+        for r in records
+    }
+
+    # pass 1 — claim creator fees on each launch wallet
+    for r in records:
+        it = items[r.launch_id]
+        if not r.mint:
+            it["claim"] = "no mint yet"
+            continue
+        try:
+            secret = decrypt_secret(r.encrypted_secret)
+            it["claim_tx"] = pumpfun.claim_creator_fees(secret, r.mint)
+        except Exception as e:  # noqa: BLE001
+            it["claim_error"] = str(e)[:160]
+
+    # give the claim transactions a moment to land before reading balances
+    time.sleep(10)
+
+    # pass 2 — sweep every wallet to the destination
+    total = 0.0
+    for r in records:
+        it = items[r.launch_id]
+        try:
+            bal = solana_client.get_balance_sol(r.deposit_wallet)
+        except Exception as e:  # noqa: BLE001
+            it["error"] = f"balance: {e}"
+            continue
+        amount = round(bal - 0.001, 9)  # keep above rent-exempt min
+        if amount <= 0:
+            it["skipped"] = f"empty ({bal} SOL)"
+            continue
+        try:
+            secret = decrypt_secret(r.encrypted_secret)
+            it["tx"] = solana_client.transfer_sol(secret, dest, amount)
+            it["amount_sol"] = amount
+            total += amount
+        except Exception as e:  # noqa: BLE001
+            it["error"] = str(e)[:160]
+
+    return {"destination": dest, "total_sol": round(total, 9), "results": list(items.values())}
 
 
 @app.get("/api/feed")
