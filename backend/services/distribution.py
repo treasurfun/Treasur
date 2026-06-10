@@ -64,14 +64,24 @@ def transfer_token_to(launch_secret: str, asset_mint: str, to_wallet: str, raw_a
     return str(sig.value)
 
 
+class DistResult(dict):
+    """A {holder: tx_signature} dict that also carries the total amount distributed.
+
+    Behaves exactly like the old plain dict (len(), .items(), indexing), so existing
+    callers keep working; extra attributes expose how much of the asset went out."""
+    amount_raw: int = 0
+    amount_ui: float = 0.0
+    decimals: int = 0
+
+
 def distribute_asset(
     launch_secret: str,
     asset_mint: str,
     holders: dict[str, int],
     exclude: set[str] | None = None,
-) -> dict[str, str]:
+) -> "DistResult":
     """Distribute the launch wallet's full balance of `asset_mint` to holders
-    pro-rata. Returns {holder: tx_signature}. Sends in small batches."""
+    pro-rata. Returns a DistResult ({holder: tx_signature} + .amount_ui). Batched."""
     exclude = exclude or set()
     c = client()
     payer = keypair_from_secret(launch_secret)
@@ -80,12 +90,12 @@ def distribute_asset(
     holders = {h: b for h, b in holders.items() if h not in exclude and h != payer_pk}
     total_weight = sum(holders.values())
     if total_weight == 0:
-        return {}
+        return DistResult()
 
     decimals, program_id = _mint_info(c, asset_mint)
     pool = get_token_balance_raw(payer_pk, asset_mint, program_id)
     if pool == 0:
-        return {}
+        return DistResult()
 
     mint_pk = Pubkey.from_string(asset_mint)
     src_ata = get_associated_token_address(payer.pubkey(), mint_pk, program_id)
@@ -140,4 +150,8 @@ def distribute_asset(
         batch_holders.append(holder)
 
     flush()
-    return results
+    out = DistResult(results)
+    out.amount_raw = int(pool)
+    out.decimals = int(decimals)
+    out.amount_ui = pool / (10 ** decimals)
+    return out

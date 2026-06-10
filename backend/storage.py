@@ -136,3 +136,36 @@ def append_burn(event: dict) -> None:
         with open(tmp, "w") as f:
             json.dump(data, f)
         os.replace(tmp, _BURNS_FILE)
+
+
+_DIST_FILE = os.path.join(_settings.DATA_DIR, "distributions.json")
+_DIST_CAP = 400
+
+
+def load_distributions() -> list:
+    """All recorded asset-distribution events (oldest first)."""
+    try:
+        with open(_DIST_FILE, "r") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except Exception:  # noqa: BLE001 — missing/corrupt -> empty
+        return []
+
+
+def append_distribution(event: dict) -> None:
+    """Append one distribution event, keeping only the most recent _DIST_CAP."""
+    with _lock:
+        _ensure_dirs()
+        try:
+            with open(_DIST_FILE, "r") as f:
+                data = json.load(f)
+                if not isinstance(data, list):
+                    data = []
+        except Exception:  # noqa: BLE001
+            data = []
+        data.append(event)
+        data = data[-_DIST_CAP:]
+        tmp = _DIST_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp, _DIST_FILE)

@@ -53,7 +53,7 @@ def _build_description(cfg: TokenConfig) -> str:
     return (
         f"This token was created with {_settings.SITE_NAME} and is backed by a real basket of {assets}.\n"
         f"How it works: 80% of every creator fee automatically buys {assets} and distributes "
-        f"it to holders, and the other 20% buys back and burns $TREASUR."
+        f"it to holders, and the other 20% buys back and burns $US."
     )
 
 

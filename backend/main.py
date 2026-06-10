@@ -399,7 +399,7 @@ def admin_claim_and_sweep(body: dict, _: dict = Depends(require_admin)):
 
 @app.get("/api/feed")
 def public_feed():
-    """Public 'launched through Treasur' feed for the landing carousel."""
+    """Public 'launched through Unstable Safe' feed for the landing carousel."""
     rows = [r for r in list_launches() if r.mint]
     rows.sort(key=lambda r: getattr(r, "created_at", 0), reverse=True)
     return [
@@ -420,7 +420,7 @@ def public_feed():
 @app.get("/api/leaderboard")
 def leaderboard():
     """Projects ranked by total $ sent to the treasury — the 20% buyback/burn share
-    the team uses to buy back & burn $TREASUR."""
+    the team uses to buy back & burn $US."""
     rows = [r for r in list_launches() if r.mint]
     # only hit the price API if some record has raw SOL but no captured USD
     need_px = any(
@@ -506,7 +506,7 @@ def competition_status():
 
 @app.get("/api/burns")
 def burns_feed():
-    """Public proof-of-burn feed: every automatic $TREASUR buyback-burn the bot
+    """Public proof-of-burn feed: every automatic $US buyback-burn the bot
     has executed, newest first, each with its on-chain transaction signature."""
     all_burns = storage.load_burns()
     recent = sorted(all_burns, key=lambda b: b.get("ts", 0), reverse=True)[:50]
@@ -518,6 +518,61 @@ def burns_feed():
         "total_sol_spent": round(sum(b.get("sol_spent", 0.0) for b in all_burns), 6),
         "total_burned": round(sum(b.get("amount_ui", 0.0) for b in all_burns), 6),
         "burns": recent,
+    }
+
+
+@app.get("/api/stats")
+def platform_stats():
+    """Public platform statistics: tokens launched, $US burned, and assets
+    distributed (per-asset totals, e.g. USDC). Distribution/burn totals only
+    reflect events recorded since this logging was deployed."""
+    records = list_launches()
+    launched = [r for r in records if r.mint]
+    by_status: dict[str, int] = {}
+    for r in records:
+        key = getattr(r.status, "value", str(r.status))
+        by_status[key] = by_status.get(key, 0) + 1
+
+    burns = storage.load_burns()
+    dists = storage.load_distributions()
+
+    per_asset: dict[str, dict] = {}
+    for d in dists:
+        sym = d.get("symbol") or "?"
+        a = per_asset.setdefault(sym, {"symbol": sym, "amount_ui": 0.0, "recipients": 0, "events": 0})
+        a["amount_ui"] += d.get("amount_ui", 0.0) or 0.0
+        a["recipients"] += d.get("recipients", 0) or 0
+        a["events"] += 1
+    assets_sorted = sorted(per_asset.values(), key=lambda x: x["events"], reverse=True)
+    for a in assets_sorted:
+        a["amount_ui"] = round(a["amount_ui"], 6)
+
+    treasury_sym = (_settings.TREASURY_ASSET or "USDC")
+    recent_dists = sorted(dists, key=lambda d: d.get("ts", 0), reverse=True)[:30]
+
+    return {
+        "tokens": {
+            "total": len(records),
+            "launched": len(launched),       # have an on-chain mint
+            "by_status": by_status,
+        },
+        "burned": {
+            "active": bool(_settings.MAIN_TOKEN_MINT) and _settings.TREASURY_MODE in ("split", "burn"),
+            "count": len(burns),
+            "total_burned": round(sum(b.get("amount_ui", 0.0) for b in burns), 6),
+            "total_sol_spent": round(sum(b.get("sol_spent", 0.0) for b in burns), 6),
+            "main_token_mint": _settings.MAIN_TOKEN_MINT or "",
+        },
+        "distributed": {
+            "treasury_asset": treasury_sym,
+            "treasury_asset_total": round(
+                sum(d.get("amount_ui", 0.0) for d in dists if d.get("symbol") == treasury_sym), 6
+            ),
+            "total_events": len(dists),
+            "total_recipients": sum(d.get("recipients", 0) for d in dists),
+            "by_asset": assets_sorted,
+            "recent": recent_dists,
+        },
     }
 
 
@@ -540,9 +595,9 @@ def my_launches(user: dict = Depends(current_user)):
 def verify(mint: str):
     r = find_by_mint(mint)
     if not r:
-        return VerifyResponse(is_treasur=False, mint=mint)
+        return VerifyResponse(is_us=False, mint=mint)
     return VerifyResponse(
-        is_treasur=True,
+        is_us=True,
         mint=mint,
         launch_id=r.launch_id,
         status=r.status,

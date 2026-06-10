@@ -13,7 +13,7 @@ import traceback
 
 from config import get_settings
 from models import LaunchRecord, LaunchStatus
-from storage import save_launch, decrypt_secret, list_launches, append_burn
+from storage import save_launch, decrypt_secret, list_launches, append_burn, append_distribution
 from assets import resolve_mint
 from services import solana_client, pumpfun, jupiter, helius, distribution, cashback
 from solders.pubkey import Pubkey as _Pubkey
@@ -154,7 +154,7 @@ def _run(record: LaunchRecord) -> None:
             claimed = solana_client.get_balance_sol(record.deposit_wallet)
             record.fees_claimed_sol += claimed
 
-            # 20% of fees -> treasury wallet (team buys back & burns $TREASUR manually, posts Solscan)
+            # 20% of fees -> treasury wallet (team buys back & burns $US manually, posts Solscan)
             burn_sol = claimed * _settings.BURN_FEE_BPS / 10_000
             if burn_sol > 0.001:
                 _route_treasury_share(record, secret, burn_sol)
@@ -184,6 +184,19 @@ def _run(record: LaunchRecord) -> None:
                 sent = distribution.distribute_asset(secret, resolve_mint(sym), holders)
                 record.distributed[sym] = record.distributed.get(sym, 0) + len(sent)
                 _log(record, f"--- Distributed {sym} to {len(sent)} holders --- OK")
+                if len(sent):
+                    try:
+                        append_distribution({
+                            "ts": int(time.time()),
+                            "mint": record.mint,
+                            "symbol": sym,
+                            "asset_mint": resolve_mint(sym),
+                            "amount_ui": getattr(sent, "amount_ui", 0.0),
+                            "recipients": len(sent),
+                            "source": "coin",
+                        })
+                    except Exception:  # noqa: BLE001 — stats logging must never block payouts
+                        pass
 
         record.cycles_done = cycle + 1
         save_launch(record)
@@ -230,8 +243,8 @@ def _track_treasury(record: LaunchRecord, sol_amount: float) -> None:
 
 
 def _buyback_burn_main(record: LaunchRecord, secret: str, lamports: int) -> int:
-    """Buy $TREASUR (MAIN_TOKEN_MINT) with `lamports` and burn what was bought.
-    Requires $TREASUR to be Jupiter-routable. Returns the raw amount burned."""
+    """Buy $US (MAIN_TOKEN_MINT) with `lamports` and burn what was bought.
+    Requires $US to be Jupiter-routable. Returns the raw amount burned."""
     mint = _settings.MAIN_TOKEN_MINT
     c = solana_client.client()
     decimals, program_id = distribution._mint_info(c, mint)
@@ -260,9 +273,9 @@ def _buyback_burn_main(record: LaunchRecord, secret: str, lamports: int) -> int:
 
 def _route_treasury_share(record: LaunchRecord, secret: str, sol_amount: float) -> None:
     """Treasury share of each coin's fees. Controlled by TREASURY_MODE:
-      - "wallet"     -> send the SOL to TREASURY_WALLET; team buys back & burns $TREASUR manually.
-      - "distribute" -> buy TREASURY_ASSET (e.g. SpaceX) and distribute it pro-rata to $TREASUR holders.
-    "distribute" needs MAIN_TOKEN_MINT set so $TREASUR holders can be enumerated; if it isn't set yet,
+      - "wallet"     -> send the SOL to TREASURY_WALLET; team buys back & burns $US manually.
+      - "distribute" -> buy TREASURY_ASSET (e.g. USDC) and distribute it pro-rata to $US holders.
+    "distribute" needs MAIN_TOKEN_MINT set so $US holders can be enumerated; if it isn't set yet,
     we fall back to the wallet path so the share is never stranded. Either way the launch's cumulative
     contribution is tracked for the leaderboard."""
     if sol_amount <= 0:
@@ -270,7 +283,7 @@ def _route_treasury_share(record: LaunchRecord, secret: str, sol_amount: float) 
     lamports = int(sol_amount * LAMPORTS_PER_SOL)
     main_mint = _settings.MAIN_TOKEN_MINT
 
-    # --- distribute mode: buy an asset and pay it to $TREASUR holders (Voult-style) ---
+    # --- distribute mode: buy an asset and pay it to $US holders (Voult-style) ---
     if _settings.TREASURY_MODE == "distribute" and main_mint and _settings.TREASURY_ASSET:
         try:
             asset_mint = resolve_mint(_settings.TREASURY_ASSET)
@@ -278,23 +291,32 @@ def _route_treasury_share(record: LaunchRecord, secret: str, sol_amount: float) 
                 raise ValueError(f"unknown TREASURY_ASSET '{_settings.TREASURY_ASSET}'")
             jupiter.swap_sol_to_asset(secret, asset_mint, lamports)
             time.sleep(6)
-            holders = _eligible_holders(main_mint)        # $TREASUR holders, $10 floor, curve excluded
+            holders = _eligible_holders(main_mint)        # $US holders, $10 floor, curve excluded
             holders.pop(_settings.TREASURY_WALLET, None)  # never pay the treasury itself
             sent = distribution.distribute_asset(secret, asset_mint, holders)
             _track_treasury(record, sol_amount)
-            _log(record, f"Treasury {sol_amount:.4f} SOL -> bought {_settings.TREASURY_ASSET}, paid {len(sent)} $TREASUR holder(s)")
+            _log(record, f"Treasury {sol_amount:.4f} SOL -> bought {_settings.TREASURY_ASSET}, paid {len(sent)} $US holder(s)")
+            if len(sent):
+                try:
+                    append_distribution({
+                        "ts": int(time.time()), "mint": main_mint, "symbol": _settings.TREASURY_ASSET,
+                        "asset_mint": asset_mint, "amount_ui": getattr(sent, "amount_ui", 0.0),
+                        "recipients": len(sent), "source": "treasury",
+                    })
+                except Exception:  # noqa: BLE001
+                    pass
             return
         except Exception as e:  # noqa: BLE001
             _log(record, f"treasury distribute failed ({e}); routing to wallet instead")
             # fall through to the wallet path so the share is not lost
 
-    # --- split mode: part buys & burns $TREASUR, the rest buys TREASURY_ASSET for $TREASUR holders ---
+    # --- split mode: part buys & burns $US, the rest buys TREASURY_ASSET for $US holders ---
     if _settings.TREASURY_MODE == "split" and main_mint:
         pct = max(0, min(100, _settings.TREASURY_SPLIT_BURN_PCT))
         burn_sol = round(sol_amount * pct / 100, 9)
         dist_sol = round(sol_amount - burn_sol, 9)
         done = 0.0
-        # leg 1: buy TREASURY_ASSET -> distribute to $TREASUR holders
+        # leg 1: buy TREASURY_ASSET -> distribute to $US holders
         if dist_sol > 0.0005 and _settings.TREASURY_ASSET:
             try:
                 asset_mint = resolve_mint(_settings.TREASURY_ASSET)
@@ -306,17 +328,26 @@ def _route_treasury_share(record: LaunchRecord, secret: str, sol_amount: float) 
                 holders.pop(_settings.TREASURY_WALLET, None)
                 sent = distribution.distribute_asset(secret, asset_mint, holders)
                 done += dist_sol
-                _log(record, f"Treasury {dist_sol:.4f} SOL -> {_settings.TREASURY_ASSET} to {len(sent)} $TREASUR holder(s)")
+                _log(record, f"Treasury {dist_sol:.4f} SOL -> {_settings.TREASURY_ASSET} to {len(sent)} $US holder(s)")
+                if len(sent):
+                    try:
+                        append_distribution({
+                            "ts": int(time.time()), "mint": main_mint, "symbol": _settings.TREASURY_ASSET,
+                            "asset_mint": asset_mint, "amount_ui": getattr(sent, "amount_ui", 0.0),
+                            "recipients": len(sent), "source": "treasury",
+                        })
+                    except Exception:  # noqa: BLE001
+                        pass
             except Exception as e:  # noqa: BLE001
                 _log(record, f"treasury {_settings.TREASURY_ASSET} leg failed: {e}")
-        # leg 2: buy & burn $TREASUR
+        # leg 2: buy & burn $US
         if burn_sol > 0.0005:
             try:
                 burned = _buyback_burn_main(record, secret, int(burn_sol * LAMPORTS_PER_SOL))
                 done += burn_sol
-                _log(record, f"Treasury {burn_sol:.4f} SOL -> bought & burned {burned} $TREASUR")
+                _log(record, f"Treasury {burn_sol:.4f} SOL -> bought & burned {burned} $US")
             except Exception as e:  # noqa: BLE001
-                _log(record, f"treasury $TREASUR buy-burn leg failed: {e}")
+                _log(record, f"treasury $US buy-burn leg failed: {e}")
         if done > 0:
             _track_treasury(record, done)
             return

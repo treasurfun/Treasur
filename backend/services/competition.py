@@ -1,17 +1,17 @@
 """Daily competition.
 
-$TREASUR's OWN pump.fun creator fees form a prize pool ("farmed fees"). Each period
+$US's OWN pump.fun creator fees form a prize pool ("farmed fees"). Each period
 the pool is split between:
   - Best Dev     — the owner whose launches contributed the most in total this period
                    (the primary award; decided first)
   - Best Project — the single launch that contributed the most this period, owned by a
                    DIFFERENT dev than the Best Dev (nobody can take both spots)
 
-Funded entirely by $TREASUR's own fees, independent of the 20% each coin routes to the
+Funded entirely by $US's own fees, independent of the 20% each coin routes to the
 treasury, so it doesn't dilute the burn / holder distributions.
 
 Activates only when MAIN_TOKEN_MINT is set AND a launch record exists for that mint
-(i.e. $TREASUR was launched through Treasur, so its creator wallet is platform-controlled
+(i.e. $US was launched through Unstable Safe, so its creator wallet is platform-controlled
 and its fees can be claimed). Until then the scheduler safely no-ops.
 """
 import threading
@@ -30,9 +30,9 @@ from storage import (
 from services import solana_client, pumpfun
 
 _settings = get_settings()
-_GAS_BUFFER_SOL = 0.01      # leave this on the $TREASUR wallet for rent/gas
+_GAS_BUFFER_SOL = 0.01      # leave this on the $US wallet for rent/gas
 _MIN_PRIZE_SOL = 0.002      # below this: skip and let fees + contributions accrue
-_POOL_CLAIM_EVERY = 3600    # claim accrued $TREASUR fees into the wallet at most hourly
+_POOL_CLAIM_EVERY = 3600    # claim accrued $US fees into the wallet at most hourly
 
 
 def _short(a: str) -> str:
@@ -56,7 +56,7 @@ def _initialize() -> None:
 
 
 def _refresh_pool() -> None:
-    """Best-effort: claim $TREASUR's accrued creator fees into its wallet (throttled) and
+    """Best-effort: claim $US's accrued creator fees into its wallet (throttled) and
     record the current pot size, so the UI can show the live prize pool between payouts."""
     main_mint = _settings.MAIN_TOKEN_MINT
     if not main_mint:
@@ -88,12 +88,12 @@ def run_competition() -> dict | None:
         return None
     rec = find_by_mint(main_mint)
     if not rec:
-        print("[competition] no $TREASUR launch record (launch it through Treasur) — skipped")
+        print("[competition] no $US launch record (launch it through Unstable Safe) — skipped")
         return None
 
     secret = decrypt_secret(rec.encrypted_secret)
 
-    # 1) claim any remaining $TREASUR creator fees -> the wallet holds the full pot
+    # 1) claim any remaining $US creator fees -> the wallet holds the full pot
     try:
         pumpfun.claim_creator_fees(secret)
         time.sleep(8)
@@ -106,7 +106,7 @@ def run_competition() -> dict | None:
         print(f"[competition] prize too small ({prize} SOL) — skipped, accruing")
         return None
 
-    # 2) per-period contributions (delta since last payout), excluding $TREASUR itself
+    # 2) per-period contributions (delta since last payout), excluding $US itself
     launches = [l for l in list_launches() if l.mint and l.mint != main_mint]
     proj_deltas: dict[str, tuple] = {}   # launch_id -> (record, delta_lamports)
     dev_totals: dict[str, int] = {}      # owner -> total delta_lamports
@@ -130,7 +130,7 @@ def run_competition() -> dict | None:
     else:
         best_rec, best_proj_delta = None, 0  # only one dev in play -> they can't win twice
 
-    # 4) split & pay, from the $TREASUR wallet
+    # 4) split & pay, from the $US wallet
     pct = max(0, min(100, _settings.COMPETITION_PROJECT_PCT))
     if best_rec is None:
         proj_prize, dev_prize = 0.0, prize       # single dev: takes the whole pot once

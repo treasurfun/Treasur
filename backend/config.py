@@ -5,7 +5,7 @@ from functools import lru_cache
 
 class Settings:
     # Branding — appended to every created coin's on-chain description.
-    SITE_NAME: str = os.getenv("SITE_NAME", "treasur.fun")
+    SITE_NAME: str = os.getenv("SITE_NAME", "unstablesafe.fun")
 
     # Solana / RPC
     RPC_ENDPOINT: str = os.getenv("RPC_ENDPOINT", "https://api.mainnet-beta.solana.com")
@@ -56,20 +56,20 @@ class Settings:
     #   BURN_FEE_BPS  -> the "treasury share" (see TREASURY_MODE below)
     #   remainder     -> buy the chosen asset basket and distribute to that coin's holders
     BURN_FEE_BPS: int = int(os.getenv("BURN_FEE_BPS", "2000"))             # 20% treasury / 80% holders
-    MAIN_TOKEN_MINT: str = os.getenv("MAIN_TOKEN_MINT", "")               # $TREASUR mint — required for treasury "distribute" mode
+    MAIN_TOKEN_MINT: str = os.getenv("MAIN_TOKEN_MINT", "")               # $US mint — required for treasury "distribute" mode
     TREASURY_WALLET: str = os.getenv("TREASURY_WALLET", "")               # the share lands here in "wallet" mode
     # What happens to the treasury share:
-    #   "wallet"     -> send it to TREASURY_WALLET; team buys back & burns $TREASUR manually (posts Solscan)  [default]
-    #   "distribute" -> auto-buy TREASURY_ASSET and distribute it pro-rata to $TREASUR holders
-    #   "split"      -> do BOTH: part buys back & burns $TREASUR, the rest buys TREASURY_ASSET for $TREASUR holders
+    #   "wallet"     -> send it to TREASURY_WALLET; team buys back & burns $US manually (posts Solscan)  [default]
+    #   "distribute" -> auto-buy TREASURY_ASSET and distribute it pro-rata to $US holders
+    #   "split"      -> do BOTH: part buys back & burns $US, the rest buys TREASURY_ASSET for $US holders
     #                   (distribute/split need MAIN_TOKEN_MINT; fall back to "wallet" if it isn't set yet)
     TREASURY_MODE: str = os.getenv("TREASURY_MODE", "wallet")
-    TREASURY_ASSET: str = os.getenv("TREASURY_ASSET", "SPACEX")           # asset paid to $TREASUR holders in distribute/split mode
-    TREASURY_SPLIT_BURN_PCT: int = int(os.getenv("TREASURY_SPLIT_BURN_PCT", "50"))  # split mode: % of the share that buys & burns $TREASUR; the rest buys TREASURY_ASSET for holders
+    TREASURY_ASSET: str = os.getenv("TREASURY_ASSET", "USDC")           # asset paid to $US holders in distribute/split mode
+    TREASURY_SPLIT_BURN_PCT: int = int(os.getenv("TREASURY_SPLIT_BURN_PCT", "50"))  # split mode: % of the share that buys & burns $US; the rest buys TREASURY_ASSET for holders
 
-    # Daily competition: $TREASUR's OWN creator fees form a prize pool, split between the
+    # Daily competition: $US's OWN creator fees form a prize pool, split between the
     # top project (most contributed to the treasury this period) and the top dev (best owner total).
-    # Activates automatically once MAIN_TOKEN_MINT is set AND $TREASUR was launched through Treasur
+    # Activates automatically once MAIN_TOKEN_MINT is set AND $US was launched through Unstable Safe
     # (so its creator wallet is platform-controlled and its fees can be claimed).
     COMPETITION_INTERVAL_SECONDS: int = int(os.getenv("COMPETITION_INTERVAL_SECONDS", "86400"))  # 24h; 172800 = every other day
     COMPETITION_PROJECT_PCT: int = int(os.getenv("COMPETITION_PROJECT_PCT", "50"))  # % of the prize to Best Project; rest to Best Dev

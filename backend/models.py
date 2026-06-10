@@ -100,7 +100,7 @@ class ClaimResponse(BaseModel):
 
 
 class VerifyResponse(BaseModel):
-    is_treasur: bool
+    is_us: bool
     mint: str
     launch_id: Optional[str] = None
     status: Optional[str] = None
