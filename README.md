@@ -2,7 +2,7 @@
 
 <img src="docs/unstablesafe-banner.png" alt="Unstable Safe — a coin backed by any asset you want" width="100%">
 
-# US
+# Unstable Safe
 
 **Asset-backed coin infrastructure on Solana**
 
@@ -10,7 +10,7 @@ Launch a memecoin, back it with a real basket of crypto, stocks, gold and pre-IP
 equity, and let creator fees buy that basket and distribute it to holders —
 automatically, on-chain, with no team in the middle.
 
-[**unstablesafe.fun**](https://unstablesafe.fun) · [Whitepaper](https://unstablesafe.fun/whitepaper) · [Leaderboard](https://unstablesafe.fun/leaderboard) · [X](https://x.com/unstablesafe) · [GitHub](https://github.com/unstable-safe/UnstableSafe)
+[**unstablesafe.fun**](https://unstablesafe.fun) · [Whitepaper](https://unstablesafe.fun/whitepaper) · [Leaderboard](https://unstablesafe.fun/leaderboard) · [X](https://x.com/unstablesafe) · [GitHub](https://github.com/unstablesafe/UnstableSafe)
 
 [![CI](https://github.com/unstablesafe/UnstableSafe/actions/workflows/ci.yml/badge.svg)](https://github.com/unstablesafe/UnstableSafe/actions/workflows/ci.yml)
 ![License: MIT](https://img.shields.io/badge/License-MIT-3FB950.svg)
