@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/unstablesafe-banner.png" alt="Unstable Safe — a coin backed by any asset you want" width="100%">
+<img src="docs/preview.jpg" alt="Unstable Safe — a coin backed by any asset you want" width="100%">
 
 # Unstable Safe
 
