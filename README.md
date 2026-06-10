@@ -22,8 +22,6 @@ automatically, on-chain, with no team in the middle.
 
 <br />
 
-<img src="docs/preview.png" alt="Unstable Safe — back your coin with crypto, stocks & gold" width="100%" />
-
 </div>
 
 ---
