@@ -1,7 +1,3 @@
-<div align="center">
-
-<img src="docs/preview.jpg" alt="Unstable Safe — a coin backed by any asset you want" width="100%">
-
 # Unstable Safe
 
 **Asset-backed coin infrastructure on Solana**
@@ -22,8 +18,9 @@ automatically, on-chain, with no team in the middle.
 
 <br />
 
-</div>
+<div align="center">
 
+<img src="docs/preview.jpg" alt="Unstable Safe — a coin backed by any asset you want" width="100%">
 ---
 
 ## Overview
